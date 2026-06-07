@@ -125,6 +125,24 @@ BEARER_TOKEN = hmac.new(
 Derives a deterministic static token from the client secret. No JWT library needed. The token
 is the same every restart, so Databricks' cached token stays valid across server restarts.
 
+#### Entity type mapping
+```python
+_DEFAULT_ENTITY_TYPES = {
+    "person":       "c360.person",
+    "guest":        "c360_person_1780596889717",
+    "organization": "c360.organization",
+    "org":          "c360.organization",
+}
+ENTITY_TYPES: dict = json.loads(os.environ.get("ENTITY_TYPES", "{}")) or _DEFAULT_ENTITY_TYPES
+```
+Different MDM environments use different entityType strings for the same logical concept — a
+"person" in one org might be `c360.person`, in another it might be a tenant-specific ID like
+`c360_person_1780596889717`. The mapping lets you point the server at a new environment by
+changing one env var without touching code.
+
+`_resolve_entity_type` passes unknown strings straight through, so Genie can also use raw
+entityType strings directly if needed.
+
 #### MCP server init
 ```python
 mcp = FastMCP(
@@ -223,13 +241,26 @@ Searches MDM for matching records using the Search API.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `search` | string | required | Name, email, or free-text query |
-| `entity_type` | string | `c360_person_1780596889717` | MDM business entity type |
+| `entity_type` | string | `"person"` | Logical name or raw MDM entityType string (see below) |
 | `max_records` | integer | `50` | Max results to return |
+
+**Entity type resolution:** the `entity_type` parameter accepts either a logical alias or a
+raw MDM entityType string. Logical aliases are resolved via the `ENTITY_TYPES` mapping:
+
+| Logical name | Resolves to |
+|-------------|-------------|
+| `person` | `c360.person` |
+| `guest` | `c360_person_1780596889717` (env-specific) |
+| `organization` / `org` | `c360.organization` |
+| any other string | passed through as-is to MDM |
+
+This means Genie can say "search for guests named John" and it resolves to the right entityType
+for the environment automatically.
 
 **MDM API called:**
 ```
 POST {MDM_BASE_URL}/search/public/api/v1/search
-Body: {"entityType": "...", "search": "...", "maxRecords": 50}
+Body: {"entityType": "<resolved>", "search": "...", "maxRecords": 50}
 ```
 
 **Response fields to know:**
@@ -259,6 +290,13 @@ to get the full record including all fields, relationships, and source cross-ref
 
 ---
 
+### `list_entity_types`
+
+Returns the current entity type mapping — the logical aliases and their resolved MDM entityType
+strings. No parameters. Useful for Genie to answer "what kinds of records can I search for?"
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |
@@ -269,6 +307,7 @@ to get the full record including all fields, relationships, and source cross-ref
 | `IICS_LOGIN_HOST` | No | IICS login host. Default: `https://dmp-us.informaticacloud.com` |
 | `OAUTH_CLIENT_ID` | Yes | Client ID you choose — give this to Databricks |
 | `OAUTH_CLIENT_SECRET` | Yes | Client secret you choose — give this to Databricks |
+| `ENTITY_TYPES` | No | JSON mapping of logical name → MDM entityType. Overrides built-in defaults. Example: `{"person":"c360.person","guest":"c360_person_1780596889717","organization":"c360.organization"}` |
 | `BASE_URL` | No | Public URL of this server (used in OAuth metadata). Default: `http://localhost:{PORT}` |
 | `PORT` | No | Port to listen on. Default: `8000` |
 
