@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MDM MCP Configurator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; font-size: 14px; }
+  .page { max-width: 1000px; margin: 0 auto; padding: 32px 24px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+  header h1 { font-size: 20px; font-weight: 700; color: #0f172a; }
+  #status-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: default; }
+  .badge-unknown    { background: #e2e8f0; color: #64748b; }
+  .badge-deployed   { background: #dcfce7; color: #16a34a; }
+  .badge-undeployed { background: #fee2e2; color: #dc2626; }
+  .badge-busy       { background: #fef9c3; color: #a16207; }
+
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; margin-bottom: 14px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; font-weight: 600; color: #475569; }
+  .field input {
+    border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 10px;
+    font-size: 13px; color: #0f172a; background: #fff; width: 100%;
+    transition: border-color .15s;
+  }
+  .field input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px #eef2ff; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { font-size: 12px; font-weight: 600; color: #64748b; text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+  tbody td { padding: 5px 8px; }
+  tbody td input { width: 100%; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 8px; font-size: 13px; }
+  tbody td input:focus { outline: none; border-color: #6366f1; }
+  .btn-rm { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .btn-rm:hover { color: #dc2626; background: #fee2e2; }
+  .btn-add { margin-top: 10px; background: none; border: 1px dashed #cbd5e1; border-radius: 6px;
+             padding: 5px 14px; font-size: 12px; color: #64748b; cursor: pointer; }
+  .btn-add:hover { border-color: #6366f1; color: #6366f1; }
+
+  .cmd-wrapper { position: relative; }
+  pre#cmd { background: #0d1117; color: #e6edf3; padding: 16px; border-radius: 8px;
+            font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .btn-copy { position: absolute; top: 10px; right: 10px; background: #21262d; color: #c9d1d9;
+              border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+  .btn-copy:hover { background: #30363d; }
+
+  .actions { display: flex; gap: 12px; margin-bottom: 16px; }
+  .btn-deploy, .btn-undeploy {
+    padding: 9px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+  }
+  .btn-deploy   { background: #4f46e5; color: #fff; }
+  .btn-undeploy { background: #dc2626; color: #fff; }
+  .btn-deploy:hover:not(:disabled)   { background: #4338ca; }
+  .btn-undeploy:hover:not(:disabled) { background: #b91c1c; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  #output { background: #0d1117; color: #3fb950; font-family: monospace; font-size: 12px;
+            padding: 14px; border-radius: 8px; height: 260px; overflow-y: auto;
+            white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
+
+  #dbx-rows tr:nth-child(even) { background: #f8fafc; }
+  #dbx-rows td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  #dbx-rows td:first-child { font-weight: 600; color: #475569; width: 220px; white-space: nowrap; }
+  #dbx-rows td:last-child { font-family: monospace; color: #0f172a; word-break: break-all; }
+  .copy-val { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; margin-left: 6px; }
+  .copy-val:hover { color: #6366f1; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>MDM MCP Configurator</h1>
+    <span id="status-badge" class="badge-unknown">Checking...</span>
+  </header>
+
+  <div class="card">
+    <h2>IDMC</h2>
+    <div class="grid2">
+      <div class="field"><label>Username</label><input id="idmc_user"></div>
+      <div class="field"><label>Password</label><input id="idmc_pass"></div>
+      <div class="field"><label>MDM Base URL</label><input id="mdm_base_url"></div>
+      <div class="field"><label>Login Host</label><input id="idmc_login_host"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Deployment</h2>
+    <div class="grid2">
+      <div class="field"><label>GCP Project</label><input id="project"></div>
+      <div class="field"><label>Region</label><input id="region"></div>
+      <div class="field"><label>Service Name</label><input id="service_name"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>OAuth (Databricks)</h2>
+    <div class="grid2">
+      <div class="field"><label>Client ID</label><input id="oauth_client_id"></div>
+      <div class="field"><label>Client Secret</label><input id="oauth_client_secret"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Entity Types</h2>
+    <table>
+      <thead><tr><th>Alias (used in Genie)</th><th>MDM Entity Type String</th><th></th></tr></thead>
+      <tbody id="entity-rows"></tbody>
+    </table>
+    <button class="btn-add" id="btn-add-row">+ Add row</button>
+  </div>
+
+  <div class="card">
+    <h2>Deploy Command</h2>
+    <div class="cmd-wrapper">
+      <pre id="cmd"></pre>
+      <button class="btn-copy" id="btn-copy">Copy</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="btn-deploy"   class="btn-deploy"   disabled>Deploy</button>
+    <button id="btn-undeploy" class="btn-undeploy" disabled>Undeploy</button>
+  </div>
+
+  <div class="card">
+    <h2>Output</h2>
+    <div id="output"></div>
+  </div>
+
+  <div class="card" id="dbx-card" style="display:none">
+    <h2>Databricks Connection Settings</h2>
+    <p style="font-size:12px;color:#64748b;margin-bottom:14px">Use these values to register the MCP connection in Databricks Unity Catalog.</p>
+    <table style="width:100%;border-collapse:collapse">
+      <tbody id="dbx-rows"></tbody>
+    </table>
+  </div>
+
+</div>
+<script>
+var $ = function(id) { return document.getElementById(id); };
+
+function addRow(alias, mdmType) {
+  alias   = alias   || '';
+  mdmType = mdmType || '';
+  var tr = document.createElement('tr');
+  var td1 = document.createElement('td');
+  var td2 = document.createElement('td');
+  var td3 = document.createElement('td');
+  var in1 = document.createElement('input'); in1.value = alias;   in1.addEventListener('input', updateCmd);
+  var in2 = document.createElement('input'); in2.value = mdmType; in2.addEventListener('input', updateCmd);
+  var btn = document.createElement('button'); btn.className = 'btn-rm'; btn.textContent = 'x';
+  btn.addEventListener('click', function() { tr.remove(); updateCmd(); });
+  td1.appendChild(in1); td2.appendChild(in2); td3.appendChild(btn);
+  tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+  $('entity-rows').appendChild(tr);
+  updateCmd();
+}
+
+function getEntityTypes() {
+  var rows = $('entity-rows').querySelectorAll('tr');
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    var inputs = rows[i].querySelectorAll('input');
+    var alias   = inputs[0].value.trim();
+    var mdmType = inputs[1].value.trim();
+    if (alias && mdmType) result.push({ alias: alias, mdm_type: mdmType });
+  }
+  return result;
+}
+
+function getConfig() {
+  return {
+    service_name:        $('service_name').value.trim(),
+    project:             $('project').value.trim(),
+    region:              $('region').value.trim(),
+    idmc_user:           $('idmc_user').value.trim(),
+    idmc_pass:           $('idmc_pass').value.trim(),
+    mdm_base_url:        $('mdm_base_url').value.trim(),
+    idmc_login_host:     $('idmc_login_host').value.trim(),
+    oauth_client_id:     $('oauth_client_id').value.trim(),
+    oauth_client_secret: $('oauth_client_secret').value.trim(),
+    entity_types:        getEntityTypes(),
+  };
+}
+
+function updateCmd() {
+  var c  = getConfig();
+  var et = {};
+  for (var i = 0; i < c.entity_types.length; i++) {
+    et[c.entity_types[i].alias] = c.entity_types[i].mdm_type;
+  }
+  var envParts = [
+    'IDMC_USER='           + c.idmc_user,
+    'IDMC_PASS='           + c.idmc_pass,
+    'MDM_BASE_URL='        + c.mdm_base_url,
+    'IDMC_LOGIN_HOST='     + c.idmc_login_host,
+    'OAUTH_CLIENT_ID='     + c.oauth_client_id,
+    'OAUTH_CLIENT_SECRET=' + c.oauth_client_secret,
+    'ENTITY_TYPES='        + JSON.stringify(et),
+  ];
+  var envStr = '^|^' + envParts.join('|');
+  var lines = [
+    'gcloud run deploy ' + c.service_name + ' \\',
+    '  --source . \\',
+    '  --region '  + c.region  + ' \\',
+    '  --project ' + c.project + ' \\',
+    '  --allow-unauthenticated \\',
+    '  --port 8000 \\',
+    '  --set-env-vars "' + envStr + '"',
+  ];
+  $('cmd').textContent = lines.join('\n');
+}
+
+function copyCmd() {
+  navigator.clipboard.writeText($('cmd').textContent);
+}
+
+function setStatus(state, url) {
+  var badge   = $('status-badge');
+  var deploy  = $('btn-deploy');
+  var undeploy = $('btn-undeploy');
+  if (state === 'deployed') {
+    badge.textContent = 'Deployed';
+    badge.className   = 'badge-deployed';
+    badge.title       = url || '';
+    deploy.disabled   = false;
+    undeploy.disabled = false;
+  } else if (state === 'undeployed') {
+    badge.textContent = 'Not deployed';
+    badge.className   = 'badge-undeployed';
+    deploy.disabled   = false;
+    undeploy.disabled = true;
+  } else if (state === 'busy') {
+    badge.textContent = 'Working...';
+    badge.className   = 'badge-busy';
+    deploy.disabled   = true;
+    undeploy.disabled = true;
+  } else {
+    badge.textContent = 'Unknown';
+    badge.className   = 'badge-unknown';
+    deploy.disabled   = true;
+    undeploy.disabled = true;
+  }
+}
+
+function checkStatus() {
+  var c = getConfig();
+  setStatus('unknown');
+  var params = 'project=' + encodeURIComponent(c.project) +
+               '&region='       + encodeURIComponent(c.region) +
+               '&service_name=' + encodeURIComponent(c.service_name);
+  fetch('/status?' + params)
+    .then(function(r) { return r.json(); })
+    .then(function(res) { setStatus(res.deployed ? 'deployed' : 'undeployed', res.url); })
+    .catch(function() { setStatus('unknown'); });
+}
+
+function logLine(text) {
+  var el = $('output');
+  el.textContent += text.replace(/\x1b\[[0-9;]*m|\[[0-9;]*m/g, '') + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function streamPost(url, body, onLine, onDone) {
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(function(resp) {
+    var reader = resp.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    function read() {
+      reader.read().then(function(chunk) {
+        if (chunk.done) { onDone(0); return; }
+        buf += dec.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (line.indexOf('data: ') === 0) {
+            var text = line.slice(6);
+            if (text.indexOf('[EXIT:') === 0) {
+              onDone(parseInt(text.slice(6)));
+              return;
+            }
+            onLine(text);
+          }
+        }
+        read();
+      });
+    }
+    read();
+  });
+}
+
+function showDbxInfo(serviceUrl) {
+  var c    = getConfig();
+  var rows = [
+    ['Connection type',  'HTTP'],
+    ['Is MCP connection', 'Yes (check the box)'],
+    ['Host',             serviceUrl],
+    ['Base path',        '/mcp'],
+    ['Auth type',        'OAuth M2M (machine-to-machine)'],
+    ['Token URL',        serviceUrl + '/oauth/token'],
+    ['Client ID',        c.oauth_client_id],
+    ['Client Secret',    c.oauth_client_secret],
+    ['OAuth scope',      '(leave blank)'],
+  ];
+  var tbody = $('dbx-rows');
+  tbody.innerHTML = '';
+  for (var i = 0; i < rows.length; i++) {
+    var tr  = document.createElement('tr');
+    var td1 = document.createElement('td'); td1.textContent = rows[i][0];
+    var td2 = document.createElement('td');
+    var val = document.createTextNode(rows[i][1]);
+    td2.appendChild(val);
+    if (rows[i][1] !== '(leave blank)' && rows[i][1] !== 'HTTP' && rows[i][1] !== 'Yes (check the box)' && rows[i][1] !== 'OAuth M2M (machine-to-machine)') {
+      var btn = document.createElement('button');
+      btn.className = 'copy-val';
+      btn.textContent = 'copy';
+      (function(v) { btn.addEventListener('click', function() { navigator.clipboard.writeText(v); }); })(rows[i][1]);
+      td2.appendChild(btn);
+    }
+    tr.appendChild(td1); tr.appendChild(td2);
+    tbody.appendChild(tr);
+  }
+  $('dbx-card').style.display = 'block';
+  $('dbx-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function runDeploy() {
+  $('output').textContent = '';
+  $('dbx-card').style.display = 'none';
+  setStatus('busy');
+  logLine('Starting deploy...');
+  var deployedUrl = null;
+  streamPost('/deploy', getConfig(), function(line) {
+    logLine(line);
+    var clean = line.replace(/\x1b\[[0-9;]*m|\[[0-9;]*m/g, '');
+    var m = clean.match(/Service URL:\s*(https:\/\/\S+)/);
+    if (m) deployedUrl = m[1].replace(/[^a-zA-Z0-9.:\-/_]/g, '');
+  }, function(code) {
+    if (code === 0) {
+      logLine('Deploy succeeded.');
+      if (deployedUrl) showDbxInfo(deployedUrl);
+    } else {
+      logLine('Deploy failed (exit ' + code + ').');
+    }
+    checkStatus();
+  });
+}
+
+function runUndeploy() {
+  if (!confirm('Delete service "' + getConfig().service_name + '"?')) return;
+  $('output').textContent = '';
+  setStatus('busy');
+  logLine('Deleting service...');
+  streamPost('/undeploy', getConfig(), logLine, function(code) {
+    logLine(code === 0 ? 'Service deleted.' : 'Delete failed (exit ' + code + ').');
+    checkStatus();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  $('btn-add-row').addEventListener('click', function() { addRow('', ''); });
+  $('btn-copy').addEventListener('click', copyCmd);
+  $('btn-deploy').addEventListener('click', runDeploy);
+  $('btn-undeploy').addEventListener('click', runUndeploy);
+  document.addEventListener('input', function(e) {
+    if (e.target.tagName === 'INPUT') updateCmd();
+  });
+
+  fetch('/defaults').then(function(r) { return r.json(); }).then(function(d) {
+    $('idmc_user').value         = d.idmc_user;
+    $('idmc_pass').value         = d.idmc_pass;
+    $('mdm_base_url').value      = d.mdm_base_url;
+    $('idmc_login_host').value   = d.idmc_login_host;
+    $('project').value           = d.project;
+    $('region').value            = d.region;
+    $('service_name').value      = d.service_name;
+    $('oauth_client_id').value   = d.oauth_client_id;
+    $('oauth_client_secret').value = d.oauth_client_secret;
+    for (var i = 0; i < d.entity_types.length; i++) {
+      addRow(d.entity_types[i].alias, d.entity_types[i].mdm_type);
+    }
+    updateCmd();
+    checkStatus();
+  });
+});
+</script>
+</body>
+</html>

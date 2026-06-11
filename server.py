@@ -23,10 +23,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 # --- Config ---
-IICS_USER           = os.environ["IICS_USER"]
-IICS_PASS           = os.environ["IICS_PASS"]
+IDMC_USER           = os.environ["IDMC_USER"]
+IDMC_PASS           = os.environ["IDMC_PASS"]
 MDM_BASE_URL        = os.environ["MDM_BASE_URL"]   # e.g. https://usw1-mdm.dmp-us.informaticacloud.com
-LOGIN_HOST          = os.environ.get("IICS_LOGIN_HOST", "https://dmp-us.informaticacloud.com")
+LOGIN_HOST          = os.environ.get("IDMC_LOGIN_HOST", "https://dmp-us.informaticacloud.com")
 OAUTH_CLIENT_ID     = os.environ["OAUTH_CLIENT_ID"]
 OAUTH_CLIENT_SECRET = os.environ["OAUTH_CLIENT_SECRET"]
 PORT                = int(os.environ.get("PORT", "8080"))
@@ -57,11 +57,11 @@ mcp = FastMCP(
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
-# --- IICS session (lazy, auto-refreshes on 401) ---
+# --- IDMC session (lazy, auto-refreshes on 401) ---
 _session_id = None
 
 def _login():
-    body = json.dumps({"username": IICS_USER, "password": IICS_PASS}).encode()
+    body = json.dumps({"username": IDMC_USER, "password": IDMC_PASS}).encode()
     req = urllib.request.Request(
         f"{LOGIN_HOST}/identity-service/api/v1/Login",
         data=body,
@@ -71,7 +71,7 @@ def _login():
         data = json.load(r)
     sid = data.get("sessionId")
     if not sid:
-        raise RuntimeError(f"IICS login failed: {data}")
+        raise RuntimeError(f"IDMC login failed: {data}")
     print(f"[auth] logged in to {data.get('orgName')} — expires {data.get('sessionExpireTime')}")
     return sid
 
@@ -135,6 +135,54 @@ def list_entity_types() -> dict:
     Returns the logical name aliases and their underlying MDM entityType strings.
     """
     return {"entity_types": ENTITY_TYPES}
+
+
+def _mdm_get_household(business_id, business_entity):
+    global _session_id
+    url  = f"{MDM_BASE_URL}/business-entity/public/api/v1/relationship/household/filter"
+    body = json.dumps({
+        "filter": {
+            "_from": {"businessId": business_id, "businessEntity": business_entity}
+        }
+    }).encode()
+
+    for attempt in range(2):
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Content-Type":   "application/json",
+                "Accept":         "application/json",
+                "IDS-SESSION-ID": _session(),
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code == 401 and attempt == 0:
+                _session_id = None
+                continue
+            err_body = e.read().decode('utf-8', errors='replace')
+            raise RuntimeError(f"MDM household lookup failed ({e.code}): {err_body}") from e
+
+
+@mcp.tool()
+def get_mdm_household(
+    business_id: str,
+    business_entity: str = "c360_person_1780596889717",
+) -> dict:
+    """
+    Get all household members linked to a given MDM person record.
+
+    Args:
+        business_id:     The MDM businessId of the person record (e.g. "MDM00000000IN6")
+        business_entity: The MDM entity type of the record. Accepts logical aliases
+                         (e.g. "person", "guest") or raw MDM entity type strings.
+
+    Returns the household relationship records, each with _from and _to business entity references.
+    """
+    return _mdm_get_household(business_id, _resolve_entity_type(business_entity))
 
 
 def _mdm_get_entity(be_name, business_id):
@@ -230,21 +278,10 @@ async def lifespan(app):
     async with mcp_app.router.lifespan_context(app):
         yield
 
-BASE_URL = os.environ.get("BASE_URL", f"http://localhost:{PORT}")
-
-async def oauth_metadata(request: Request):
-    return JSONResponse({
-        "issuer":                                BASE_URL,
-        "token_endpoint":                        f"{BASE_URL}/oauth/token",
-        "grant_types_supported":                 ["client_credentials"],
-        "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
-    })
-
 app = Starlette(
     lifespan=lifespan,
     routes=[
         Route("/oauth/token", oauth_token, methods=["POST"]),
-        Route("/.well-known/oauth-authorization-server", oauth_metadata, methods=["GET"]),
         Mount("/", app=mcp_app),
     ],
 )

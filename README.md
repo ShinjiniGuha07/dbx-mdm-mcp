@@ -48,6 +48,40 @@ curl -s -X POST http://localhost:8000/oauth/token \
 
 ## Deploy to Cloud Run
 
+### Prerequisites
+
+**1. Install and authenticate gcloud CLI**
+```bash
+brew install google-cloud-sdk
+gcloud auth login
+gcloud auth application-default login
+```
+
+**2. Create a GCP project and enable billing** — required to activate APIs (free tier still applies).
+
+**3. Enable required APIs**
+```bash
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
+  --project=<your-project-id>
+```
+
+**4. Grant the default compute service account permissions** (needed for Cloud Build):
+```bash
+# Find your project number (different from project ID):
+gcloud projects describe <your-project-id> --format='value(projectNumber)'
+# Or find it on the GCP Console project dashboard.
+
+PROJECT_NUMBER=<number-from-above>
+gcloud projects add-iam-policy-binding <your-project-id> \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/storage.objectViewer"
+gcloud projects add-iam-policy-binding <your-project-id> \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/logging.logWriter"
+```
+
+### Deploy
+
 ```bash
 gcloud run deploy mdm-search-mcp \
   --source . \
