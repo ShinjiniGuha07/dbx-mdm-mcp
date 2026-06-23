@@ -48,6 +48,8 @@ curl -s -X POST http://localhost:8000/oauth/token \
 
 ## Deploy to Cloud Run
 
+ **Corporate GCP projects (org policy):** Many work GCP projects block `allUsers` IAM via org policy, which means `--allow-unauthenticated` will silently fail and Databricks won't be able to reach the service. If you hit this, use a personal/sandbox project instead (e.g. `shin-mdm-dbx-demo` is mine and it works). Ask your GCP admin for an exception if you need it on a corporate project. 
+
 ### Prerequisites
 
 **1. Install and authenticate gcloud CLI**
@@ -65,22 +67,30 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
   --project=<your-project-id>
 ```
 
-**4. Grant the default compute service account permissions** (needed for Cloud Build):
+**4. Grant required permissions** (needed on new projects — two different service accounts):
 ```bash
 # Find your project number (different from project ID):
 gcloud projects describe <your-project-id> --format='value(projectNumber)'
-# Or find it on the GCP Console project dashboard.
 
 PROJECT_NUMBER=<number-from-above>
+
+# Compute SA — lets Cloud Build read uploaded source from GCS
 gcloud projects add-iam-policy-binding <your-project-id> \
   --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
   --role="roles/storage.objectViewer"
 gcloud projects add-iam-policy-binding <your-project-id> \
   --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
   --role="roles/logging.logWriter"
+
+# Cloud Build SA — lets Cloud Build push the built image to Artifact Registry
+gcloud projects add-iam-policy-binding <your-project-id> \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
 ```
 
 ### Deploy
+
+> **Note:** Do not include `PORT` in `--set-env-vars` — Cloud Run sets it automatically and will reject the deploy if you pass it.
 
 ```bash
 gcloud run deploy mdm-search-mcp \
@@ -88,7 +98,7 @@ gcloud run deploy mdm-search-mcp \
   --region us-central1 \
   --allow-unauthenticated \
   --port 8000 \
-  --set-env-vars "IICS_USER=...,IICS_PASS=...,MDM_BASE_URL=https://usw1-mdm.dmp-us.informaticacloud.com,IICS_LOGIN_HOST=https://dmp-us.informaticacloud.com,OAUTH_CLIENT_ID=...,OAUTH_CLIENT_SECRET=...,BASE_URL=https://<your-run-url>"
+  --set-env-vars "IDMC_USER=...,IDMC_PASS=...,MDM_BASE_URL=https://usw1-mdm.dmp-us.informaticacloud.com,IDMC_LOGIN_HOST=https://dmp-us.informaticacloud.com,OAUTH_CLIENT_ID=...,OAUTH_CLIENT_SECRET=...,BASE_URL=https://<your-run-url>"
 ```
 
 To override entity types for a specific environment, add:

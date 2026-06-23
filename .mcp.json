@@ -1,0 +1,11 @@
+  {
+    "mcpServers": {
+      "mdm-search": {
+        "type": "http",
+        "url": "https://mdm-search-mcp-229007842141.us-central1.run.app/mcp",
+        "headers": {
+          "Authorization": "Bearer d315ee5de7b2085c76af4e955a965aec655e8d01ef58f0c233cae522bc7caa9a"
+        }
+      }
+    }
+  }

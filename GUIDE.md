@@ -31,7 +31,7 @@ This server bridges Genie to Informatica MDM so you can ask things like:
 - "Get the full record for business ID 12345"
 - "Search for Alan Guy and show me his address"
 
-Genie calls the MCP tools, the server calls the MDM APIs using an IICS session, and the results
+Genie calls the MCP tools, the server calls the MDM APIs using an IDMC session, and the results
 come back as structured JSON that Genie's LLM interprets into a natural language answer.
 
 ---
@@ -54,7 +54,7 @@ Databricks Genie
 │                    tools/call               │
 └─────────────┬───────────────────────────────┘
               │  2. IDS-SESSION-ID header
-              │  (IICS session, auto-refreshes)
+              │  (IDMC session, auto-refreshes)
               ▼
    Informatica MDM (dmp-us.informaticacloud.com)
       - /search/public/api/v1/search
@@ -85,16 +85,16 @@ Databricks to re-fetch it hourly, which is fine for a demo.
 The server accepts credentials via **both** HTTP Basic auth header (`Authorization: Basic base64(id:secret)`)
 and request body form fields — because different OAuth clients use different conventions (RFC 6749 §2.3).
 
-### Layer 2: MCP Server → MDM (IICS Session)
+### Layer 2: MCP Server → MDM (IDMC Session)
 
-The server authenticates to Informatica MDM using IICS identity service:
+The server authenticates to Informatica MDM using IDMC identity service:
 
 1. On first tool call, POSTs `{username, password}` to `https://dmp-us.informaticacloud.com/identity-service/api/v1/Login`
 2. Gets back a `sessionId` — stored as a global `_session_id`
 3. Sends `IDS-SESSION-ID: <sessionId>` on every MDM API call
 4. If MDM returns 401 (session expired), clears `_session_id` and re-logs in automatically
 
-IICS sessions are short-lived (~30 min). The auto-refresh handles expiry transparently.
+IDMC sessions are short-lived (~30 min). The auto-refresh handles expiry transparently.
 
 ### OAuth Metadata Endpoint
 
@@ -154,7 +154,7 @@ mcp = FastMCP(
 its own MCP proxy (`Databricks-MCP-Proxy/1.0`), which changes the `Host` header. Without this,
 the MCP library returns **421 Misdirected Request** and rejects every call.
 
-#### IICS session management
+#### IDMC session management
 ```python
 _session_id = None
 
@@ -301,10 +301,10 @@ strings. No parameters. Useful for Genie to answer "what kinds of records can I 
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `IICS_USER` | Yes | Informatica username |
-| `IICS_PASS` | Yes | Informatica password |
+| `IDMC_USER` | Yes | Informatica username |
+| `IDMC_PASS` | Yes | Informatica password |
 | `MDM_BASE_URL` | Yes | MDM environment base URL, e.g. `https://usw1-mdm.dmp-us.informaticacloud.com` |
-| `IICS_LOGIN_HOST` | No | IICS login host. Default: `https://dmp-us.informaticacloud.com` |
+| `IDMC_LOGIN_HOST` | No | IDMC login host. Default: `https://dmp-us.informaticacloud.com` |
 | `OAUTH_CLIENT_ID` | Yes | Client ID you choose — give this to Databricks |
 | `OAUTH_CLIENT_SECRET` | Yes | Client secret you choose — give this to Databricks |
 | `ENTITY_TYPES` | No | JSON mapping of logical name → MDM entityType. Overrides built-in defaults. Example: `{"person":"c360.person","guest":"c360_person_1780596889717","organization":"c360.organization"}` |
@@ -387,21 +387,29 @@ gcloud run deploy mdm-search-mcp \
   --region us-central1 \
   --allow-unauthenticated \
   --port 8000 \
-  --set-env-vars "IICS_USER=...,IICS_PASS=...,MDM_BASE_URL=https://usw1-mdm.dmp-us.informaticacloud.com,IICS_LOGIN_HOST=https://dmp-us.informaticacloud.com,OAUTH_CLIENT_ID=JAVANAVI,OAUTH_CLIENT_SECRET=STRONGJAVANAVI,BASE_URL=https://<your-run-url>"
+  --set-env-vars "IDMC_USER=...,IDMC_PASS=...,MDM_BASE_URL=https://usw1-mdm.dmp-us.informaticacloud.com,IDMC_LOGIN_HOST=https://dmp-us.informaticacloud.com,OAUTH_CLIENT_ID=JAVANAVI,OAUTH_CLIENT_SECRET=STRONGJAVANAVI,BASE_URL=https://<your-run-url>"
 ```
 
 ### First-time setup on a new GCP project
 1. **Enable billing** — required to enable APIs (free tier still applies after billing is linked)
 2. Say **Y** when prompted to enable `cloudbuild`, `run`, and `artifactregistry` APIs
-3. If you get a permissions error on the default service account, run:
+3. Grant required permissions (two different service accounts):
    ```bash
+   # Compute SA — lets Cloud Build read uploaded source from GCS
    gcloud projects add-iam-policy-binding <project-id> \
      --member="serviceAccount:<project-number>-compute@developer.gserviceaccount.com" \
      --role="roles/storage.objectViewer"
    gcloud projects add-iam-policy-binding <project-id> \
      --member="serviceAccount:<project-number>-compute@developer.gserviceaccount.com" \
      --role="roles/logging.logWriter"
+
+   # Cloud Build SA — lets Cloud Build push the built image to Artifact Registry
+   gcloud projects add-iam-policy-binding <project-id> \
+     --member="serviceAccount:<project-number>@cloudbuild.gserviceaccount.com" \
+     --role="roles/artifactregistry.writer"
    ```
+
+> **Note:** Do not include `PORT` in `--set-env-vars` — Cloud Run sets it automatically and will reject the deploy if you pass it.
 
 ### Current deployment
 - **Project:** `shin-mdm-dbx-demo`
@@ -474,9 +482,9 @@ The `--set-env-vars` string had a line break splitting the variable name. Always
 as a single unbroken string, or use the `gcloud` tool via a script rather than pasting into
 the terminal.
 
-### `IICS login failed` / MDM 401
-- Check `IICS_USER` and `IICS_PASS` are correct for the target environment
-- Verify `IICS_LOGIN_HOST` matches the org's region (`dmp-us` vs `dmp-eu` etc.)
+### `IDMC login failed` / MDM 401
+- Check `IDMC_USER` and `IDMC_PASS` are correct for the target environment
+- Verify `IDMC_LOGIN_HOST` matches the org's region (`dmp-us` vs `dmp-eu` etc.)
 - The session auto-refreshes on 401 — if it fails twice, the credentials are wrong
 
 ### `mcp` package not found / Python version error
