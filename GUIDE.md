@@ -377,6 +377,8 @@ protocol uses Server-Sent Events (SSE) for responses and returns 406 without it.
 
 ## Deployment to Cloud Run
 
+> **Corporate GCP projects (org policy):** Many work GCP projects block `allUsers` IAM via org policy, which means `--allow-unauthenticated` will silently fail and Databricks (and Claude Code) won't be able to reach the service. Use a personal/sandbox project instead. Ask your GCP admin for an exception if you need it on a corporate project.
+
 Cloud Run builds from source using the `Dockerfile`. It handles TLS termination — your server
 listens on HTTP port 8000 but the public URL is always HTTPS on port 443.
 
