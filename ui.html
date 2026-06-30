@@ -68,6 +68,11 @@
   #dbx-rows td:last-child { font-family: monospace; color: #0f172a; word-break: break-all; }
   .copy-val { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; margin-left: 6px; }
   .copy-val:hover { color: #6366f1; }
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab-btn { padding: 5px 16px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;
+             font-size: 12px; font-weight: 600; color: #64748b; cursor: pointer; }
+  .tab-btn:hover { background: #f1f5f9; }
+  .tab-btn.tab-active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
 </style>
 </head>
 <body>
@@ -115,6 +120,15 @@
   </div>
 
   <div class="card">
+    <h2>Relationship Types</h2>
+    <table>
+      <thead><tr><th>Entity (from Entity Types)</th><th>Rel Alias (used in Genie)</th><th>MDM Relationship String</th><th></th></tr></thead>
+      <tbody id="rel-rows"></tbody>
+    </table>
+    <button class="btn-add" id="btn-add-rel-row">+ Add row</button>
+  </div>
+
+  <div class="card">
     <h2>Deploy Command</h2>
     <div class="cmd-wrapper">
       <pre id="cmd"></pre>
@@ -132,17 +146,107 @@
     <div id="output"></div>
   </div>
 
-  <div class="card" id="dbx-card" style="display:none">
-    <h2>Databricks Connection Settings</h2>
-    <p style="font-size:12px;color:#64748b;margin-bottom:14px">Use these values to register the MCP connection in Databricks Unity Catalog.</p>
-    <table style="width:100%;border-collapse:collapse">
-      <tbody id="dbx-rows"></tbody>
-    </table>
+  <div class="card" id="conn-card" style="display:none">
+    <h2>Connection Settings</h2>
+    <div class="tab-bar">
+      <button class="tab-btn tab-active" id="tab-dbx" onclick="switchTab('dbx')">Databricks</button>
+      <button class="tab-btn" id="tab-claude" onclick="switchTab('claude')">Claude Code</button>
+    </div>
+
+    <div id="pane-dbx">
+      <p style="font-size:12px;color:#64748b;margin-bottom:14px">Use these values to register the MCP connection in Databricks Unity Catalog.</p>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody id="dbx-rows"></tbody>
+      </table>
+    </div>
+
+    <div id="pane-claude" style="display:none">
+      <p style="font-size:12px;color:#64748b;margin-bottom:14px">Copy this into <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px">.mcp.json</code> in your project root to add this server to Claude Code.</p>
+      <div class="cmd-wrapper">
+        <pre id="claude-json"></pre>
+        <button class="btn-copy" id="btn-copy-claude">Copy</button>
+      </div>
+    </div>
   </div>
 
 </div>
 <script>
 var $ = function(id) { return document.getElementById(id); };
+
+function getEntityAliases() {
+  var rows = $('entity-rows').querySelectorAll('tr');
+  var aliases = [];
+  for (var i = 0; i < rows.length; i++) {
+    var alias = rows[i].querySelectorAll('input')[0].value.trim();
+    if (alias) aliases.push(alias);
+  }
+  return aliases;
+}
+
+function buildEntitySelect(selected) {
+  var sel = document.createElement('select');
+  sel.style.cssText = 'width:100%;border:1px solid #e2e8f0;border-radius:5px;padding:5px 8px;font-size:13px;background:#fff';
+  sel.addEventListener('change', updateCmd);
+  var aliases = getEntityAliases();
+  if (aliases.length === 0) aliases = ['(no entities defined)'];
+  for (var i = 0; i < aliases.length; i++) {
+    var opt = document.createElement('option');
+    opt.value = aliases[i]; opt.textContent = aliases[i];
+    if (aliases[i] === selected) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  return sel;
+}
+
+function refreshEntitySelects() {
+  var aliases = getEntityAliases();
+  var selects = $('rel-rows').querySelectorAll('select');
+  for (var i = 0; i < selects.length; i++) {
+    var current = selects[i].value;
+    selects[i].innerHTML = '';
+    for (var j = 0; j < aliases.length; j++) {
+      var opt = document.createElement('option');
+      opt.value = aliases[j]; opt.textContent = aliases[j];
+      if (aliases[j] === current) opt.selected = true;
+      selects[i].appendChild(opt);
+    }
+  }
+  updateCmd();
+}
+
+function addRelRow(entityAlias, relAlias, mdmRel) {
+  entityAlias = entityAlias || '';
+  relAlias    = relAlias    || '';
+  mdmRel      = mdmRel      || '';
+  var tr  = document.createElement('tr');
+  var td1 = document.createElement('td');
+  var td2 = document.createElement('td');
+  var td3 = document.createElement('td');
+  var td4 = document.createElement('td');
+  var sel = buildEntitySelect(entityAlias);
+  var in2 = document.createElement('input'); in2.value = relAlias; in2.addEventListener('input', updateCmd);
+  var in3 = document.createElement('input'); in3.value = mdmRel;   in3.addEventListener('input', updateCmd);
+  var btn = document.createElement('button'); btn.className = 'btn-rm'; btn.textContent = 'x';
+  btn.addEventListener('click', function() { tr.remove(); updateCmd(); });
+  td1.appendChild(sel); td2.appendChild(in2); td3.appendChild(in3); td4.appendChild(btn);
+  tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+  $('rel-rows').appendChild(tr);
+  updateCmd();
+}
+
+function getRelationshipTypes() {
+  var rows = $('rel-rows').querySelectorAll('tr');
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    var sel      = rows[i].querySelector('select');
+    var inputs   = rows[i].querySelectorAll('input');
+    var entityAlias = sel ? sel.value.trim() : '';
+    var relAlias    = inputs[0] ? inputs[0].value.trim() : '';
+    var mdmRel      = inputs[1] ? inputs[1].value.trim() : '';
+    if (entityAlias && relAlias && mdmRel) result.push({ entity_alias: entityAlias, rel_alias: relAlias, mdm_rel: mdmRel });
+  }
+  return result;
+}
 
 function addRow(alias, mdmType) {
   alias   = alias   || '';
@@ -185,6 +289,7 @@ function getConfig() {
     oauth_client_id:     $('oauth_client_id').value.trim(),
     oauth_client_secret: $('oauth_client_secret').value.trim(),
     entity_types:        getEntityTypes(),
+    relationship_types:  getRelationshipTypes(),
   };
 }
 
@@ -194,6 +299,12 @@ function updateCmd() {
   for (var i = 0; i < c.entity_types.length; i++) {
     et[c.entity_types[i].alias] = c.entity_types[i].mdm_type;
   }
+  var rt = {};
+  for (var i = 0; i < c.relationship_types.length; i++) {
+    var r = c.relationship_types[i];
+    if (!rt[r.entity_alias]) rt[r.entity_alias] = {};
+    rt[r.entity_alias][r.rel_alias] = r.mdm_rel;
+  }
   var envParts = [
     'IDMC_USER='           + c.idmc_user,
     'IDMC_PASS='           + c.idmc_pass,
@@ -202,6 +313,7 @@ function updateCmd() {
     'OAUTH_CLIENT_ID='     + c.oauth_client_id,
     'OAUTH_CLIENT_SECRET=' + c.oauth_client_secret,
     'ENTITY_TYPES='        + JSON.stringify(et),
+    'RELATIONSHIP_TYPES='  + JSON.stringify(rt),
   ];
   var envStr = '^|^' + envParts.join('|');
   var lines = [
@@ -299,8 +411,26 @@ function streamPost(url, body, onLine, onDone) {
   });
 }
 
-function showDbxInfo(serviceUrl) {
-  var c    = getConfig();
+function switchTab(tab) {
+  $('pane-dbx').style.display    = tab === 'dbx'    ? 'block' : 'none';
+  $('pane-claude').style.display = tab === 'claude' ? 'block' : 'none';
+  $('tab-dbx').className    = 'tab-btn' + (tab === 'dbx'    ? ' tab-active' : '');
+  $('tab-claude').className = 'tab-btn' + (tab === 'claude' ? ' tab-active' : '');
+}
+
+async function computeBearerToken(secret) {
+  var enc = new TextEncoder();
+  var key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  var sig = await crypto.subtle.sign('HMAC', key, enc.encode('mdm-search-bearer'));
+  return Array.from(new Uint8Array(sig)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+async function showConnInfo(serviceUrl) {
+  var c = getConfig();
+
+  // --- Databricks tab ---
   var rows = [
     ['Connection type',  'HTTP'],
     ['Is MCP connection', 'Yes (check the box)'],
@@ -330,13 +460,28 @@ function showDbxInfo(serviceUrl) {
     tr.appendChild(td1); tr.appendChild(td2);
     tbody.appendChild(tr);
   }
-  $('dbx-card').style.display = 'block';
-  $('dbx-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // --- Claude Code tab ---
+  var token = await computeBearerToken(c.oauth_client_secret);
+  var mcpJson = JSON.stringify({
+    mcpServers: {
+      "mdm-search": {
+        type: "http",
+        url: serviceUrl + "/mcp",
+        headers: { Authorization: "Bearer " + token }
+      }
+    }
+  }, null, 2);
+  $('claude-json').textContent = mcpJson;
+  $('btn-copy-claude').onclick = function() { navigator.clipboard.writeText(mcpJson); };
+
+  $('conn-card').style.display = 'block';
+  $('conn-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function runDeploy() {
   $('output').textContent = '';
-  $('dbx-card').style.display = 'none';
+  $('conn-card').style.display = 'none';
   setStatus('busy');
   logLine('Starting deploy...');
   var deployedUrl = null;
@@ -348,7 +493,7 @@ function runDeploy() {
   }, function(code) {
     if (code === 0) {
       logLine('Deploy succeeded.');
-      if (deployedUrl) showDbxInfo(deployedUrl);
+      if (deployedUrl) showConnInfo(deployedUrl);
     } else {
       logLine('Deploy failed (exit ' + code + ').');
     }
@@ -369,11 +514,16 @@ function runUndeploy() {
 
 document.addEventListener('DOMContentLoaded', function() {
   $('btn-add-row').addEventListener('click', function() { addRow('', ''); });
+  $('btn-add-rel-row').addEventListener('click', function() { addRelRow('', '', ''); });
   $('btn-copy').addEventListener('click', copyCmd);
   $('btn-deploy').addEventListener('click', runDeploy);
   $('btn-undeploy').addEventListener('click', runUndeploy);
   document.addEventListener('input', function(e) {
-    if (e.target.tagName === 'INPUT') updateCmd();
+    if (e.target.tagName === 'INPUT') {
+      // If an entity alias changed, refresh the dropdowns in the relationship table
+      if (e.target.closest('#entity-rows')) refreshEntitySelects();
+      updateCmd();
+    }
   });
 
   fetch('/defaults').then(function(r) { return r.json(); }).then(function(d) {
@@ -388,6 +538,10 @@ document.addEventListener('DOMContentLoaded', function() {
     $('oauth_client_secret').value = d.oauth_client_secret;
     for (var i = 0; i < d.entity_types.length; i++) {
       addRow(d.entity_types[i].alias, d.entity_types[i].mdm_type);
+    }
+    for (var i = 0; i < d.relationship_types.length; i++) {
+      var r = d.relationship_types[i];
+      addRelRow(r.entity_alias, r.rel_alias, r.mdm_rel);
     }
     updateCmd();
     checkStatus();

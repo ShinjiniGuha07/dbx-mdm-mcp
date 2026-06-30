@@ -30,11 +30,19 @@ DEFAULTS = {
         {"alias": "guest",        "mdm_type": "c360_person_1780596889717"},
         {"alias": "organization", "mdm_type": "c360.organization"},
     ],
+    "relationship_types": [
+        {"entity_alias": "person", "rel_alias": "household", "mdm_rel": "household"},
+        {"entity_alias": "guest",  "rel_alias": "household", "mdm_rel": "household"},
+    ],
 }
 
 
 def build_env_vars(cfg: dict) -> dict:
     entity_map = {r["alias"]: r["mdm_type"] for r in cfg["entity_types"]}
+    # Group relationship types by entity alias: {entity_alias: {rel_alias: mdm_rel}}
+    rel_map: dict = {}
+    for r in cfg.get("relationship_types", []):
+        rel_map.setdefault(r["entity_alias"], {})[r["rel_alias"]] = r["mdm_rel"]
     return {
         "IDMC_USER":           cfg["idmc_user"],
         "IDMC_PASS":           cfg["idmc_pass"],
@@ -43,6 +51,7 @@ def build_env_vars(cfg: dict) -> dict:
         "OAUTH_CLIENT_ID":     cfg["oauth_client_id"],
         "OAUTH_CLIENT_SECRET": cfg["oauth_client_secret"],
         "ENTITY_TYPES":        json.dumps(entity_map, separators=(",", ":")),
+        "RELATIONSHIP_TYPES":  json.dumps(rel_map,    separators=(",", ":")),
     }
 
 

@@ -45,6 +45,32 @@ def _resolve_entity_type(name: str) -> str:
     """Accept a logical name (e.g. 'person', 'guest') or a raw entity type string."""
     return ENTITY_TYPES.get(name.lower(), name)
 
+# RELATIONSHIP_TYPES: {entity_alias: {rel_alias: mdm_rel_string}}
+# Override via RELATIONSHIP_TYPES env var as JSON, e.g.:
+#   '{"person":{"household":"household"},"guest":{"household":"household"}}'
+_DEFAULT_RELATIONSHIP_TYPES = {
+    "person": {"household": "household"},
+    "guest":  {"household": "household"},
+}
+RELATIONSHIP_TYPES: dict = json.loads(os.environ.get("RELATIONSHIP_TYPES", "{}")) or _DEFAULT_RELATIONSHIP_TYPES
+
+def _resolve_relationship(entity_alias: str, rel_alias: str):
+    """
+    Returns (mdm_rel_string, warning) tuple.
+    warning is None if the combo is configured, a message string if not.
+    """
+    entity_key = entity_alias.lower()
+    rel_key    = rel_alias.lower()
+    entity_rels = RELATIONSHIP_TYPES.get(entity_key)
+    if entity_rels is None:
+        configured = list(RELATIONSHIP_TYPES.keys())
+        return None, f"No relationships configured for entity '{entity_alias}'. Configured entities: {configured}"
+    mdm_rel = entity_rels.get(rel_key)
+    if mdm_rel is None:
+        configured = list(entity_rels.keys())
+        return None, f"Relationship '{rel_alias}' not configured for entity '{entity_alias}'. Configured relationships: {configured}"
+    return mdm_rel, None
+
 # Static bearer token derived from the client secret — no JWT needed for demo
 BEARER_TOKEN = hmac.new(
     OAUTH_CLIENT_SECRET.encode(),
@@ -137,9 +163,9 @@ def list_entity_types() -> dict:
     return {"entity_types": ENTITY_TYPES}
 
 
-def _mdm_get_household(business_id, business_entity):
+def _mdm_get_relationship(business_id, business_entity, rel_type):
     global _session_id
-    url  = f"{MDM_BASE_URL}/business-entity/public/api/v1/relationship/household/filter"
+    url  = f"{MDM_BASE_URL}/business-entity/public/api/v1/relationship/{rel_type}/filter"
     body = json.dumps({
         "filter": {
             "_from": {"businessId": business_id, "businessEntity": business_entity}
@@ -164,25 +190,41 @@ def _mdm_get_household(business_id, business_entity):
                 _session_id = None
                 continue
             err_body = e.read().decode('utf-8', errors='replace')
-            raise RuntimeError(f"MDM household lookup failed ({e.code}): {err_body}") from e
+            raise RuntimeError(f"MDM relationship lookup failed ({e.code}): {err_body}") from e
 
 
 @mcp.tool()
-def get_mdm_household(
+def get_mdm_relationships(
     business_id: str,
-    business_entity: str = "c360_person_1780596889717",
+    entity_type: str = "guest",
+    relationship_type: str = "household",
 ) -> dict:
     """
-    Get all household members linked to a given MDM person record.
+    Get related records linked to a given MDM entity via a configured relationship type.
 
     Args:
-        business_id:     The MDM businessId of the person record (e.g. "MDM00000000IN6")
-        business_entity: The MDM entity type of the record. Accepts logical aliases
-                         (e.g. "person", "guest") or raw MDM entity type strings.
+        business_id:       The MDM businessId of the record (e.g. "MDM00000000IN6")
+        entity_type:       Logical entity alias (e.g. "person", "guest", "organization").
+                           Must be one of the configured entity types.
+        relationship_type: Logical relationship alias (e.g. "household").
+                           Must be configured for the given entity type.
 
-    Returns the household relationship records, each with _from and _to business entity references.
+    Returns relationship records, each with _from and _to business entity references.
+    If the entity/relationship combination is not configured, returns a warning instead.
     """
-    return _mdm_get_household(business_id, _resolve_entity_type(business_entity))
+    mdm_rel, warning = _resolve_relationship(entity_type, relationship_type)
+    if warning:
+        return {"warning": warning}
+    return _mdm_get_relationship(business_id, _resolve_entity_type(entity_type), mdm_rel)
+
+
+@mcp.tool()
+def list_relationship_types() -> dict:
+    """
+    List all configured relationship types grouped by entity.
+    Returns the entity aliases and their allowed relationship aliases with MDM relationship strings.
+    """
+    return {"relationship_types": RELATIONSHIP_TYPES}
 
 
 def _mdm_get_entity(be_name, business_id):
