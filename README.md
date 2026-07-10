@@ -128,3 +128,7 @@ Then add it to Genie via **Settings → MCP Servers → Add Server → External 
 
 See `.env.example` for all variables and descriptions.
 See `GUIDE.md` for full architecture, code walkthrough, and troubleshooting.
+
+
+# TODO:
+1. add hierarchies
