@@ -2,12 +2,91 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MDM MCP Configurator</title>
+<title>MDM MCP</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; font-size: 14px; }
+
+  /* ── Top nav ── */
+  .topnav {
+    background: #fff; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; gap: 0; padding: 0 32px; height: 52px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topnav-brand { font-size: 15px; font-weight: 700; color: #0f172a; margin-right: 32px; }
+  .nav-btn {
+    padding: 0 18px; height: 52px; border: none; background: none;
+    font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer;
+    border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+  }
+  .nav-btn:hover { color: #4f46e5; }
+  .nav-btn.nav-active { color: #4f46e5; border-bottom-color: #4f46e5; }
+
   .page { max-width: 1000px; margin: 0 auto; padding: 32px 24px; }
 
+  /* ── Home pane ── */
+  .home-hero { margin-bottom: 32px; }
+  .home-hero h1 { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+  .home-hero p  { font-size: 14px; color: #475569; line-height: 1.7; max-width: 680px; }
+
+  .section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: #94a3b8; margin-bottom: 12px; margin-top: 32px;
+  }
+
+  .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tool-card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .tool-card .tool-name {
+    font-size: 12px; font-weight: 700; color: #4f46e5;
+    font-family: ui-monospace, monospace; margin-bottom: 6px;
+  }
+  .tool-card .tool-desc { font-size: 13px; color: #334155; line-height: 1.55; }
+  .tool-card .tool-needs {
+    margin-top: 8px; font-size: 11px; color: #94a3b8;
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  }
+  .tool-card .tool-needs span { font-weight: 600; color: #64748b; }
+  .tag {
+    display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0;
+    border-radius: 4px; padding: 1px 7px; font-size: 11px; color: #475569;
+  }
+  .tag.req { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+
+  .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cfg-card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .cfg-card h3 { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+  .cfg-card .cfg-desc { font-size: 12px; color: #64748b; line-height: 1.55; margin-bottom: 8px; }
+  .cfg-card .cfg-used { font-size: 11px; color: #94a3b8; }
+  .cfg-card .cfg-used span { font-weight: 600; color: #64748b; }
+
+  .flow-box {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 20px; margin-top: 12px;
+  }
+  .flow-box p { font-size: 13px; color: #334155; line-height: 1.7; }
+  .flow-box code {
+    font-family: ui-monospace, monospace; font-size: 12px;
+    background: #f1f5f9; border-radius: 4px; padding: 1px 6px;
+  }
+  .flow-step {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .flow-step:last-child { margin-bottom: 0; }
+  .step-num {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    background: #4f46e5; color: #fff; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step p { font-size: 13px; color: #334155; line-height: 1.55; }
+
+  /* ── Configurator pane ── */
   header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
   header h1 { font-size: 20px; font-weight: 700; color: #0f172a; }
   #status-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: default; }
@@ -76,7 +155,176 @@
 </style>
 </head>
 <body>
-<div class="page">
+
+<!-- ── Top nav ── -->
+<nav class="topnav">
+  <span class="topnav-brand">MDM MCP</span>
+  <button class="nav-btn" id="nav-home"         onclick="switchPage('home')">Home</button>
+  <button class="nav-btn" id="nav-configurator" onclick="switchPage('configurator')">MDM MCP Configurator</button>
+</nav>
+
+<!-- ════════════════════════════════════════════════
+     HOME PANE
+════════════════════════════════════════════════ -->
+<div id="pane-home" class="page">
+
+  <div class="home-hero">
+    <h1>MDM MCP Server</h1>
+    <p>
+      A Model Context Protocol (MCP) server that exposes Informatica MDM Business 360 as tools
+      for AI assistants — Databricks Genie, Claude Code, and any other MCP-compatible client.
+      Operators configure which entity types, relationship types, and create permissions are
+      available; the AI can then search, read, and write MDM records through natural-language
+      conversations without direct API access.
+    </p>
+  </div>
+
+  <!-- Tools -->
+  <div class="section-title">Available Tools</div>
+  <div class="tool-grid">
+
+    <div class="tool-card">
+      <div class="tool-name">search_mdm_entity</div>
+      <div class="tool-desc">Full-text search across MDM records for a given entity type. Returns matched records with relevance scores.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag req">Entity Types</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">list_entity_types</div>
+      <div class="tool-desc">Lists all configured entity type aliases and their underlying MDM entity type strings. The AI calls this to discover what entity types are available.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag">none</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">get_mdm_entity</div>
+      <div class="tool-desc">Fetches the full record for a specific MDM entity by business entity name and business ID. Returns all fields including metadata.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag">none</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">get_mdm_relationships</div>
+      <div class="tool-desc">Returns records related to a given entity via a configured relationship type — e.g. all members of a household linked to a person record.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag req">Entity Types</span> <span class="tag req">Relationship Types</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">list_relationship_types</div>
+      <div class="tool-desc">Lists all configured query relationship types grouped by entity alias. The AI calls this to know which relationships can be queried.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag">none</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">create_mdm_relationship</div>
+      <div class="tool-desc">Creates a new relationship link between two MDM records — e.g. adding a person to a household. Only allowed combos (from entity → rel type → to entity) are permitted.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag req">Entity Types</span> <span class="tag req">Create Relationship Types</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">list_create_relationship_types</div>
+      <div class="tool-desc">Lists all relationship types that are permitted for creation, grouped by from-entity alias. The AI calls this before creating a relationship.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag">none</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">create_mdm_entity</div>
+      <div class="tool-desc">Creates a new master record in MDM. The AI first calls list_entity_create_fields to learn which fields are required, prompts the user for any missing ones, then submits the create request. Returns the new businessId and a view URL.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag req">Entity Types</span> <span class="tag req">Entity Create Fields</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="tool-name">list_entity_create_fields</div>
+      <div class="tool-desc">Returns the field definitions configured for creating a given entity type — field label, MDM field name, and whether the field is required. The AI always calls this before create_mdm_entity.</div>
+      <div class="tool-needs"><span>Requires config:</span> <span class="tag req">Entity Create Fields</span></div>
+    </div>
+
+  </div>
+
+  <!-- Config sections -->
+  <div class="section-title">Configuration Sections</div>
+  <div class="cfg-grid">
+
+    <div class="cfg-card">
+      <h3>IDMC Credentials</h3>
+      <div class="cfg-desc">Username, password, MDM Base URL, and Login Host for your Informatica IDMC org. These authenticate every request the server makes to MDM.</div>
+      <div class="cfg-used"><span>Used by:</span> all tools (session auth)</div>
+    </div>
+
+    <div class="cfg-card">
+      <h3>Deployment</h3>
+      <div class="cfg-desc">GCP project ID, region, and Cloud Run service name. Controls where the server is deployed. Not passed to the running container.</div>
+      <div class="cfg-used"><span>Used by:</span> gcloud deploy command only</div>
+    </div>
+
+    <div class="cfg-card">
+      <h3>OAuth (Databricks)</h3>
+      <div class="cfg-desc">Client ID and secret used for OAuth M2M authentication between Databricks (or Claude Code) and this MCP server. The server derives a static bearer token from the secret.</div>
+      <div class="cfg-used"><span>Used by:</span> MCP transport auth — all tools</div>
+    </div>
+
+    <div class="cfg-card">
+      <h3>Create Rel Source System</h3>
+      <div class="cfg-desc">The MDM source system identifier passed as a query parameter when creating relationships or entities (e.g. <code style="font-size:11px;background:#f1f5f9;padding:1px 5px;border-radius:4px">c360.default.system</code>). Identifies the origin of created records.</div>
+      <div class="cfg-used"><span>Used by:</span> create_mdm_relationship, create_mdm_entity</div>
+    </div>
+
+    <div class="cfg-card">
+      <h3>Entity Types</h3>
+      <div class="cfg-desc">Maps short aliases (e.g. <em>person</em>, <em>guest</em>) to MDM entity type strings (e.g. <em>c360.person</em>). Aliases are what the AI and users reference in conversations.</div>
+      <div class="cfg-used"><span>Used by:</span> search, get, create entity &amp; relationship tools</div>
+    </div>
+
+    <div class="cfg-card">
+      <h3>Entity Create Fields</h3>
+      <div class="cfg-desc">Per-entity list of fields the AI should gather before creating a record. Each row defines a human-readable label, the exact MDM field name, and whether the field is required.</div>
+      <div class="cfg-used"><span>Used by:</span> list_entity_create_fields, create_mdm_entity</div>
+    </div>
+
+    <div class="cfg-card">
+      <h3>Relationship Types</h3>
+      <div class="cfg-desc">Maps entity alias + relationship alias → MDM relationship string for <em>querying</em> relationships. Controls which entity/relationship combos the AI can read.</div>
+      <div class="cfg-used"><span>Used by:</span> get_mdm_relationships, list_relationship_types</div>
+    </div>
+
+    <div class="cfg-card">
+      <h3>Create Relationship Types</h3>
+      <div class="cfg-desc">Maps from-entity alias + relationship alias → MDM relationship string + to-entity alias for <em>creating</em> relationships. Separate from query types so create permissions can be restricted independently.</div>
+      <div class="cfg-used"><span>Used by:</span> create_mdm_relationship, list_create_relationship_types</div>
+    </div>
+
+  </div>
+
+  <!-- How it fits together -->
+  <div class="section-title">How It All Fits Together</div>
+  <div class="flow-box">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <p><strong>Authenticate</strong> — on first tool call the server logs in to IDMC using your credentials and caches the session. On 401 it automatically re-logs in.</p>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <p><strong>Resolve aliases</strong> — the AI passes short aliases like <code>person</code>. The server looks them up in <strong>Entity Types</strong> to get the MDM entity string (e.g. <code>c360.person</code>) before hitting the API.</p>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <p><strong>Guard creates</strong> — create operations are only allowed for combos explicitly listed in <strong>Entity Create Fields</strong> (for entity creation) or <strong>Create Relationship Types</strong> (for relationship creation). Anything else returns a warning, never an API call.</p>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <p><strong>Field gathering</strong> — before calling <code>create_mdm_entity</code> the AI always calls <code>list_entity_create_fields</code> first, then prompts the user for any required fields that were not already provided in the conversation.</p>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <p><strong>Deploy</strong> — the Configurator page writes all settings into <code>env.yaml</code> and runs <code>gcloud run deploy</code>. The running Cloud Run service reads config from environment variables at startup.</p>
+    </div>
+  </div>
+
+</div><!-- /pane-home -->
+
+
+<!-- ════════════════════════════════════════════════
+     CONFIGURATOR PANE
+════════════════════════════════════════════════ -->
+<div id="pane-configurator" class="page" style="display:none">
 
   <header>
     <h1>MDM MCP Configurator</h1>
@@ -112,11 +360,22 @@
 
   <div class="card">
     <h2>Entity Types</h2>
+    <p style="font-size:11px;color:#94a3b8;margin-top:-8px;margin-bottom:10px">Used for both search and create. Aliases defined here are available to search_mdm_entity and create_mdm_entity.</p>
     <table>
       <thead><tr><th>Alias (used in Genie)</th><th>MDM Entity Type String</th><th></th></tr></thead>
       <tbody id="entity-rows"></tbody>
     </table>
     <button class="btn-add" id="btn-add-row">+ Add row</button>
+  </div>
+
+  <div class="card">
+    <h2>Entity Create Fields</h2>
+    <p style="font-size:11px;color:#94a3b8;margin-top:-8px;margin-bottom:10px">Fields the LLM will gather before calling create_mdm_entity. Use exact MDM field names (e.g. firstName, lastName).</p>
+    <table>
+      <thead><tr><th>Entity Alias</th><th>Field Label</th><th>MDM Field Name</th><th>Required</th><th></th></tr></thead>
+      <tbody id="entity-field-rows"></tbody>
+    </table>
+    <button class="btn-add" id="btn-add-entity-field-row">+ Add field</button>
   </div>
 
   <div class="card">
@@ -126,6 +385,18 @@
       <tbody id="rel-rows"></tbody>
     </table>
     <button class="btn-add" id="btn-add-rel-row">+ Add row</button>
+  </div>
+
+  <div class="card">
+    <h2>Create Relationship Types</h2>
+    <div style="margin-bottom:14px">
+      <div class="field" style="max-width:320px"><label>Source System</label><input id="create_rel_source_system" placeholder="c360.default.system"></div>
+    </div>
+    <table>
+      <thead><tr><th>From Entity</th><th>Rel Alias (used in Genie)</th><th>To Entity</th><th>MDM Relationship String</th><th></th></tr></thead>
+      <tbody id="create-rel-rows"></tbody>
+    </table>
+    <button class="btn-add" id="btn-add-create-rel-row">+ Add row</button>
   </div>
 
   <div class="card">
@@ -149,8 +420,9 @@
   <div class="card" id="conn-card" style="display:none">
     <h2>Connection Settings</h2>
     <div class="tab-bar">
-      <button class="tab-btn tab-active" id="tab-dbx" onclick="switchTab('dbx')">Databricks</button>
-      <button class="tab-btn" id="tab-claude" onclick="switchTab('claude')">Claude Code</button>
+      <button class="tab-btn tab-active" id="tab-dbx"   onclick="switchTab('dbx')">Databricks</button>
+      <button class="tab-btn"            id="tab-claude" onclick="switchTab('claude')">Claude Code</button>
+      <button class="tab-btn"            id="tab-slack"  onclick="switchTab('slack')">Slack</button>
     </div>
 
     <div id="pane-dbx">
@@ -167,12 +439,42 @@
         <button class="btn-copy" id="btn-copy-claude">Copy</button>
       </div>
     </div>
+
+    <div id="pane-slack" style="display:none">
+      <p style="font-size:12px;color:#64748b;margin-bottom:14px">Use these values in the Slack <strong>Add MCP Server</strong> dialog. Select <strong>Manual OAuth</strong> as the auth type.</p>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody id="slack-rows"></tbody>
+      </table>
+    </div>
   </div>
 
-</div>
+</div><!-- /pane-configurator -->
+
 <script>
 var $ = function(id) { return document.getElementById(id); };
 
+/* ── Page navigation ── */
+function switchPage(page, pushState) {
+  $('pane-home').style.display         = page === 'home'         ? 'block' : 'none';
+  $('pane-configurator').style.display = page === 'configurator' ? 'block' : 'none';
+  $('nav-home').className         = 'nav-btn' + (page === 'home'         ? ' nav-active' : '');
+  $('nav-configurator').className = 'nav-btn' + (page === 'configurator' ? ' nav-active' : '');
+  if (pushState !== false) {
+    var url = page === 'home' ? '/home' : '/mdm_config';
+    history.pushState({ page: page }, '', url);
+  }
+}
+
+window.addEventListener('popstate', function(e) {
+  var page = (e.state && e.state.page) ? e.state.page : pageFromPath();
+  switchPage(page, false);
+});
+
+function pageFromPath() {
+  return window.location.pathname === '/mdm_config' ? 'configurator' : 'home';
+}
+
+/* ── Entity alias helpers ── */
 function getEntityAliases() {
   var rows = $('entity-rows').querySelectorAll('tr');
   var aliases = [];
@@ -211,9 +513,42 @@ function refreshEntitySelects() {
       selects[i].appendChild(opt);
     }
   }
+  refreshCreateRelSelects();
+  refreshEntityFieldSelects();
   updateCmd();
 }
 
+function refreshCreateRelSelects() {
+  var aliases = getEntityAliases();
+  var selects = $('create-rel-rows').querySelectorAll('select');
+  for (var i = 0; i < selects.length; i++) {
+    var current = selects[i].value;
+    selects[i].innerHTML = '';
+    for (var j = 0; j < aliases.length; j++) {
+      var opt = document.createElement('option');
+      opt.value = aliases[j]; opt.textContent = aliases[j];
+      if (aliases[j] === current) opt.selected = true;
+      selects[i].appendChild(opt);
+    }
+  }
+}
+
+function refreshEntityFieldSelects() {
+  var aliases = getEntityAliases();
+  var selects = $('entity-field-rows').querySelectorAll('select');
+  for (var i = 0; i < selects.length; i++) {
+    var current = selects[i].value;
+    selects[i].innerHTML = '';
+    for (var j = 0; j < aliases.length; j++) {
+      var opt = document.createElement('option');
+      opt.value = aliases[j]; opt.textContent = aliases[j];
+      if (aliases[j] === current) opt.selected = true;
+      selects[i].appendChild(opt);
+    }
+  }
+}
+
+/* ── Table row builders ── */
 function addRelRow(entityAlias, relAlias, mdmRel) {
   entityAlias = entityAlias || '';
   relAlias    = relAlias    || '';
@@ -234,18 +569,51 @@ function addRelRow(entityAlias, relAlias, mdmRel) {
   updateCmd();
 }
 
-function getRelationshipTypes() {
-  var rows = $('rel-rows').querySelectorAll('tr');
-  var result = [];
-  for (var i = 0; i < rows.length; i++) {
-    var sel      = rows[i].querySelector('select');
-    var inputs   = rows[i].querySelectorAll('input');
-    var entityAlias = sel ? sel.value.trim() : '';
-    var relAlias    = inputs[0] ? inputs[0].value.trim() : '';
-    var mdmRel      = inputs[1] ? inputs[1].value.trim() : '';
-    if (entityAlias && relAlias && mdmRel) result.push({ entity_alias: entityAlias, rel_alias: relAlias, mdm_rel: mdmRel });
-  }
-  return result;
+function addCreateRelRow(fromAlias, relAlias, toAlias, mdmRel) {
+  fromAlias = fromAlias || '';
+  relAlias  = relAlias  || '';
+  toAlias   = toAlias   || '';
+  mdmRel    = mdmRel    || '';
+  var tr  = document.createElement('tr');
+  var td1 = document.createElement('td');
+  var td2 = document.createElement('td');
+  var td3 = document.createElement('td');
+  var td4 = document.createElement('td');
+  var td5 = document.createElement('td');
+  var selFrom = buildEntitySelect(fromAlias);
+  var selTo   = buildEntitySelect(toAlias);
+  var in2 = document.createElement('input'); in2.value = relAlias; in2.addEventListener('input', updateCmd);
+  var in4 = document.createElement('input'); in4.value = mdmRel;   in4.addEventListener('input', updateCmd);
+  var btn = document.createElement('button'); btn.className = 'btn-rm'; btn.textContent = 'x';
+  btn.addEventListener('click', function() { tr.remove(); updateCmd(); });
+  td1.appendChild(selFrom); td2.appendChild(in2); td3.appendChild(selTo); td4.appendChild(in4); td5.appendChild(btn);
+  tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
+  $('create-rel-rows').appendChild(tr);
+  updateCmd();
+}
+
+function addEntityFieldRow(entityAlias, label, field, required) {
+  entityAlias = entityAlias || '';
+  label       = label       || '';
+  field       = field       || '';
+  var tr  = document.createElement('tr');
+  var td1 = document.createElement('td');
+  var td2 = document.createElement('td');
+  var td3 = document.createElement('td');
+  var td4 = document.createElement('td');
+  var td5 = document.createElement('td');
+  var sel = buildEntitySelect(entityAlias);
+  var in2 = document.createElement('input'); in2.value = label; in2.addEventListener('input', updateCmd);
+  var in3 = document.createElement('input'); in3.value = field; in3.addEventListener('input', updateCmd);
+  var chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!required;
+  chk.style.cssText = 'width:16px;height:16px;cursor:pointer;';
+  chk.addEventListener('change', updateCmd);
+  var btn = document.createElement('button'); btn.className = 'btn-rm'; btn.textContent = 'x';
+  btn.addEventListener('click', function() { tr.remove(); updateCmd(); });
+  td1.appendChild(sel); td2.appendChild(in2); td3.appendChild(in3); td4.appendChild(chk); td5.appendChild(btn);
+  tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
+  $('entity-field-rows').appendChild(tr);
+  updateCmd();
 }
 
 function addRow(alias, mdmType) {
@@ -265,6 +633,7 @@ function addRow(alias, mdmType) {
   updateCmd();
 }
 
+/* ── Data collectors ── */
 function getEntityTypes() {
   var rows = $('entity-rows').querySelectorAll('tr');
   var result = [];
@@ -277,86 +646,147 @@ function getEntityTypes() {
   return result;
 }
 
+function getRelationshipTypes() {
+  var rows = $('rel-rows').querySelectorAll('tr');
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    var sel      = rows[i].querySelector('select');
+    var inputs   = rows[i].querySelectorAll('input');
+    var entityAlias = sel ? sel.value.trim() : '';
+    var relAlias    = inputs[0] ? inputs[0].value.trim() : '';
+    var mdmRel      = inputs[1] ? inputs[1].value.trim() : '';
+    if (entityAlias && relAlias && mdmRel) result.push({ entity_alias: entityAlias, rel_alias: relAlias, mdm_rel: mdmRel });
+  }
+  return result;
+}
+
+function getCreateRelationshipTypes() {
+  var rows = $('create-rel-rows').querySelectorAll('tr');
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    var sels   = rows[i].querySelectorAll('select');
+    var inputs = rows[i].querySelectorAll('input');
+    var fromAlias = sels[0]   ? sels[0].value.trim()   : '';
+    var relAlias  = inputs[0] ? inputs[0].value.trim() : '';
+    var toAlias   = sels[1]   ? sels[1].value.trim()   : '';
+    var mdmRel    = inputs[1] ? inputs[1].value.trim() : '';
+    if (fromAlias && relAlias && toAlias && mdmRel)
+      result.push({ from_entity_alias: fromAlias, rel_alias: relAlias, to_entity_alias: toAlias, mdm_rel: mdmRel });
+  }
+  return result;
+}
+
+function getCreateEntityFields() {
+  var rows = $('entity-field-rows').querySelectorAll('tr');
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    var sel    = rows[i].querySelector('select');
+    var inputs = rows[i].querySelectorAll('input:not([type="checkbox"])');
+    var chk    = rows[i].querySelector('input[type="checkbox"]');
+    var alias  = sel       ? sel.value.trim()    : '';
+    var lbl    = inputs[0] ? inputs[0].value.trim() : '';
+    var fld    = inputs[1] ? inputs[1].value.trim() : '';
+    var req    = chk       ? chk.checked : false;
+    if (alias && lbl && fld) result.push({ entity_alias: alias, label: lbl, field: fld, required: req });
+  }
+  return result;
+}
+
 function getConfig() {
   return {
-    service_name:        $('service_name').value.trim(),
-    project:             $('project').value.trim(),
-    region:              $('region').value.trim(),
-    idmc_user:           $('idmc_user').value.trim(),
-    idmc_pass:           $('idmc_pass').value.trim(),
-    mdm_base_url:        $('mdm_base_url').value.trim(),
-    idmc_login_host:     $('idmc_login_host').value.trim(),
-    oauth_client_id:     $('oauth_client_id').value.trim(),
-    oauth_client_secret: $('oauth_client_secret').value.trim(),
-    entity_types:        getEntityTypes(),
-    relationship_types:  getRelationshipTypes(),
+    service_name:              $('service_name').value.trim(),
+    project:                   $('project').value.trim(),
+    region:                    $('region').value.trim(),
+    idmc_user:                 $('idmc_user').value.trim(),
+    idmc_pass:                 $('idmc_pass').value.trim(),
+    mdm_base_url:              $('mdm_base_url').value.trim(),
+    idmc_login_host:           $('idmc_login_host').value.trim(),
+    oauth_client_id:           $('oauth_client_id').value.trim(),
+    oauth_client_secret:       $('oauth_client_secret').value.trim(),
+    entity_types:              getEntityTypes(),
+    relationship_types:        getRelationshipTypes(),
+    create_rel_source_system:  $('create_rel_source_system').value.trim() || 'c360.default.system',
+    create_relationship_types: getCreateRelationshipTypes(),
+    create_entity_fields:      getCreateEntityFields(),
   };
 }
 
+/* ── Deploy command preview ── */
 function updateCmd() {
-  var c  = getConfig();
+  var c = getConfig();
   var et = {};
-  for (var i = 0; i < c.entity_types.length; i++) {
-    et[c.entity_types[i].alias] = c.entity_types[i].mdm_type;
-  }
+  for (var i = 0; i < c.entity_types.length; i++) et[c.entity_types[i].alias] = c.entity_types[i].mdm_type;
   var rt = {};
   for (var i = 0; i < c.relationship_types.length; i++) {
     var r = c.relationship_types[i];
     if (!rt[r.entity_alias]) rt[r.entity_alias] = {};
     rt[r.entity_alias][r.rel_alias] = r.mdm_rel;
   }
-  var envParts = [
-    'IDMC_USER='           + c.idmc_user,
-    'IDMC_PASS='           + c.idmc_pass,
-    'MDM_BASE_URL='        + c.mdm_base_url,
-    'IDMC_LOGIN_HOST='     + c.idmc_login_host,
-    'OAUTH_CLIENT_ID='     + c.oauth_client_id,
-    'OAUTH_CLIENT_SECRET=' + c.oauth_client_secret,
-    'ENTITY_TYPES='        + JSON.stringify(et),
-    'RELATIONSHIP_TYPES='  + JSON.stringify(rt),
-  ];
-  var envStr = '^|^' + envParts.join('|');
+  var crt = {};
+  for (var i = 0; i < c.create_relationship_types.length; i++) {
+    var cr = c.create_relationship_types[i];
+    if (!crt[cr.from_entity_alias]) crt[cr.from_entity_alias] = {};
+    crt[cr.from_entity_alias][cr.rel_alias] = { mdm_rel: cr.mdm_rel, to_entity: cr.to_entity_alias };
+  }
+  var cef = {};
+  for (var i = 0; i < c.create_entity_fields.length; i++) {
+    var f = c.create_entity_fields[i];
+    if (!cef[f.entity_alias]) cef[f.entity_alias] = [];
+    cef[f.entity_alias].push({ label: f.label, field: f.field, required: f.required });
+  }
+  var envMap = {
+    'IDMC_USER':                 c.idmc_user,
+    'IDMC_PASS':                 c.idmc_pass,
+    'MDM_BASE_URL':              c.mdm_base_url,
+    'IDMC_LOGIN_HOST':           c.idmc_login_host,
+    'OAUTH_CLIENT_ID':           c.oauth_client_id,
+    'OAUTH_CLIENT_SECRET':       c.oauth_client_secret,
+    'ENTITY_TYPES':              JSON.stringify(et),
+    'RELATIONSHIP_TYPES':        JSON.stringify(rt),
+    'CREATE_REL_SOURCE_SYSTEM':  c.create_rel_source_system,
+    'CREATE_RELATIONSHIP_TYPES': JSON.stringify(crt),
+    'CREATE_ENTITY_FIELDS':      JSON.stringify(cef),
+  };
+  var yamlLines = [];
+  for (var key in envMap) {
+    var val = envMap[key].replace(/'/g, "''");
+    yamlLines.push(key + ": '" + val + "'");
+  }
   var lines = [
+    '# env.yaml (written automatically by Deploy button):',
+    '# ' + yamlLines.join('\n# '),
+    '',
     'gcloud run deploy ' + c.service_name + ' \\',
     '  --source . \\',
     '  --region '  + c.region  + ' \\',
     '  --project ' + c.project + ' \\',
     '  --allow-unauthenticated \\',
     '  --port 8000 \\',
-    '  --set-env-vars "' + envStr + '"',
+    '  --env-vars-file env.yaml \\',
+    '  --set-build-env-vars CACHEBUST=$(date +%s)',
   ];
   $('cmd').textContent = lines.join('\n');
 }
 
-function copyCmd() {
-  navigator.clipboard.writeText($('cmd').textContent);
-}
+function copyCmd() { navigator.clipboard.writeText($('cmd').textContent); }
 
+/* ── Status badge ── */
 function setStatus(state, url) {
-  var badge   = $('status-badge');
-  var deploy  = $('btn-deploy');
+  var badge    = $('status-badge');
+  var deploy   = $('btn-deploy');
   var undeploy = $('btn-undeploy');
   if (state === 'deployed') {
-    badge.textContent = 'Deployed';
-    badge.className   = 'badge-deployed';
-    badge.title       = url || '';
-    deploy.disabled   = false;
-    undeploy.disabled = false;
+    badge.textContent = 'Deployed'; badge.className = 'badge-deployed'; badge.title = url || '';
+    deploy.disabled = false; undeploy.disabled = false;
   } else if (state === 'undeployed') {
-    badge.textContent = 'Not deployed';
-    badge.className   = 'badge-undeployed';
-    deploy.disabled   = false;
-    undeploy.disabled = true;
+    badge.textContent = 'Not deployed'; badge.className = 'badge-undeployed';
+    deploy.disabled = false; undeploy.disabled = true;
   } else if (state === 'busy') {
-    badge.textContent = 'Working...';
-    badge.className   = 'badge-busy';
-    deploy.disabled   = true;
-    undeploy.disabled = true;
+    badge.textContent = 'Working...'; badge.className = 'badge-busy';
+    deploy.disabled = true; undeploy.disabled = true;
   } else {
-    badge.textContent = 'Unknown';
-    badge.className   = 'badge-unknown';
-    deploy.disabled   = true;
-    undeploy.disabled = true;
+    badge.textContent = 'Unknown'; badge.className = 'badge-unknown';
+    deploy.disabled = true; undeploy.disabled = true;
   }
 }
 
@@ -368,10 +798,14 @@ function checkStatus() {
                '&service_name=' + encodeURIComponent(c.service_name);
   fetch('/status?' + params)
     .then(function(r) { return r.json(); })
-    .then(function(res) { setStatus(res.deployed ? 'deployed' : 'undeployed', res.url); })
+    .then(function(res) {
+      setStatus(res.deployed ? 'deployed' : 'undeployed', res.url);
+      if (res.deployed && res.url) showConnInfo(res.url, true);
+    })
     .catch(function() { setStatus('unknown'); });
 }
 
+/* ── Output / streaming ── */
 function logLine(text) {
   var el = $('output');
   el.textContent += text.replace(/\x1b\[[0-9;]*m|\[[0-9;]*m/g, '') + '\n';
@@ -380,27 +814,20 @@ function logLine(text) {
 
 function streamPost(url, body, onLine, onDone) {
   fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }).then(function(resp) {
     var reader = resp.body.getReader();
-    var dec = new TextDecoder();
-    var buf = '';
+    var dec = new TextDecoder(), buf = '';
     function read() {
       reader.read().then(function(chunk) {
         if (chunk.done) { onDone(0); return; }
         buf += dec.decode(chunk.value, { stream: true });
-        var lines = buf.split('\n');
-        buf = lines.pop();
+        var lines = buf.split('\n'); buf = lines.pop();
         for (var i = 0; i < lines.length; i++) {
           var line = lines[i];
           if (line.indexOf('data: ') === 0) {
             var text = line.slice(6);
-            if (text.indexOf('[EXIT:') === 0) {
-              onDone(parseInt(text.slice(6)));
-              return;
-            }
+            if (text.indexOf('[EXIT:') === 0) { onDone(parseInt(text.slice(6))); return; }
             onLine(text);
           }
         }
@@ -411,26 +838,25 @@ function streamPost(url, body, onLine, onDone) {
   });
 }
 
+/* ── Connection info tabs ── */
 function switchTab(tab) {
   $('pane-dbx').style.display    = tab === 'dbx'    ? 'block' : 'none';
   $('pane-claude').style.display = tab === 'claude' ? 'block' : 'none';
+  $('pane-slack').style.display  = tab === 'slack'  ? 'block' : 'none';
   $('tab-dbx').className    = 'tab-btn' + (tab === 'dbx'    ? ' tab-active' : '');
   $('tab-claude').className = 'tab-btn' + (tab === 'claude' ? ' tab-active' : '');
+  $('tab-slack').className  = 'tab-btn' + (tab === 'slack'  ? ' tab-active' : '');
 }
 
 async function computeBearerToken(secret) {
   var enc = new TextEncoder();
-  var key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
+  var key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   var sig = await crypto.subtle.sign('HMAC', key, enc.encode('mdm-search-bearer'));
   return Array.from(new Uint8Array(sig)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
 }
 
-async function showConnInfo(serviceUrl) {
+async function showConnInfo(serviceUrl, noScroll) {
   var c = getConfig();
-
-  // --- Databricks tab ---
   var rows = [
     ['Connection type',  'HTTP'],
     ['Is MCP connection', 'Yes (check the box)'],
@@ -442,48 +868,60 @@ async function showConnInfo(serviceUrl) {
     ['Client Secret',    c.oauth_client_secret],
     ['OAuth scope',      '(leave blank)'],
   ];
-  var tbody = $('dbx-rows');
-  tbody.innerHTML = '';
+  var tbody = $('dbx-rows'); tbody.innerHTML = '';
   for (var i = 0; i < rows.length; i++) {
-    var tr  = document.createElement('tr');
+    var tr = document.createElement('tr');
     var td1 = document.createElement('td'); td1.textContent = rows[i][0];
     var td2 = document.createElement('td');
-    var val = document.createTextNode(rows[i][1]);
-    td2.appendChild(val);
-    if (rows[i][1] !== '(leave blank)' && rows[i][1] !== 'HTTP' && rows[i][1] !== 'Yes (check the box)' && rows[i][1] !== 'OAuth M2M (machine-to-machine)') {
-      var btn = document.createElement('button');
-      btn.className = 'copy-val';
-      btn.textContent = 'copy';
+    td2.appendChild(document.createTextNode(rows[i][1]));
+    if (!['(leave blank)', 'HTTP', 'Yes (check the box)', 'OAuth M2M (machine-to-machine)'].includes(rows[i][1])) {
+      var btn = document.createElement('button'); btn.className = 'copy-val'; btn.textContent = 'copy';
       (function(v) { btn.addEventListener('click', function() { navigator.clipboard.writeText(v); }); })(rows[i][1]);
       td2.appendChild(btn);
     }
-    tr.appendChild(td1); tr.appendChild(td2);
-    tbody.appendChild(tr);
+    tr.appendChild(td1); tr.appendChild(td2); tbody.appendChild(tr);
   }
-
-  // --- Claude Code tab ---
   var token = await computeBearerToken(c.oauth_client_secret);
-  var mcpJson = JSON.stringify({
-    mcpServers: {
-      "mdm-search": {
-        type: "http",
-        url: serviceUrl + "/mcp",
-        headers: { Authorization: "Bearer " + token }
-      }
-    }
-  }, null, 2);
+  var mcpJson = JSON.stringify({ mcpServers: { "mdm-search": { type: "http", url: serviceUrl + "/mcp", headers: { Authorization: "Bearer " + token } } } }, null, 2);
   $('claude-json').textContent = mcpJson;
   $('btn-copy-claude').onclick = function() { navigator.clipboard.writeText(mcpJson); };
 
+  var slackRows = [
+    ['URL',                serviceUrl + '/mcp'],
+    ['Auth type',          'Manual OAuth'],
+    ['Client ID',          c.oauth_client_id],
+    ['Client Secret',      c.oauth_client_secret],
+    ['Authorization URL',  serviceUrl + '/oauth/authorize'],
+    ['Token request URL',  serviceUrl + '/oauth/token'],
+    ['Use HTTP Basic Auth','checked'],
+    ['Use PKCE',           'unchecked'],
+    ['OAuth scopes',       '(leave empty)'],
+    ['Identity URL',       '(leave empty)'],
+    ['Custom headers',     '(leave empty)'],
+  ];
+  var slackTbody = $('slack-rows'); slackTbody.innerHTML = '';
+  for (var i = 0; i < slackRows.length; i++) {
+    var tr = document.createElement('tr');
+    var td1 = document.createElement('td'); td1.textContent = slackRows[i][0];
+    var td2 = document.createElement('td');
+    td2.appendChild(document.createTextNode(slackRows[i][1]));
+    var noCopy = ['Manual OAuth','checked','unchecked','(leave empty)'];
+    if (noCopy.indexOf(slackRows[i][1]) === -1) {
+      var btn = document.createElement('button'); btn.className = 'copy-val'; btn.textContent = 'copy';
+      (function(v) { btn.addEventListener('click', function() { navigator.clipboard.writeText(v); }); })(slackRows[i][1]);
+      td2.appendChild(btn);
+    }
+    tr.appendChild(td1); tr.appendChild(td2); slackTbody.appendChild(tr);
+  }
+
   $('conn-card').style.display = 'block';
-  $('conn-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!noScroll) $('conn-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/* ── Deploy / undeploy ── */
 function runDeploy() {
-  $('output').textContent = '';
-  $('conn-card').style.display = 'none';
-  setStatus('busy');
-  logLine('Starting deploy...');
+  $('output').textContent = ''; $('conn-card').style.display = 'none';
+  setStatus('busy'); logLine('Starting deploy...');
   var deployedUrl = null;
   streamPost('/deploy', getConfig(), function(line) {
     logLine(line);
@@ -491,57 +929,64 @@ function runDeploy() {
     var m = clean.match(/Service URL:\s*(https:\/\/\S+)/);
     if (m) deployedUrl = m[1].replace(/[^a-zA-Z0-9.:\-/_]/g, '');
   }, function(code) {
-    if (code === 0) {
-      logLine('Deploy succeeded.');
-      if (deployedUrl) showConnInfo(deployedUrl);
-    } else {
-      logLine('Deploy failed (exit ' + code + ').');
-    }
+    if (code === 0) { logLine('Deploy succeeded.'); if (deployedUrl) showConnInfo(deployedUrl); }
+    else { logLine('Deploy failed (exit ' + code + ').'); }
     checkStatus();
   });
 }
 
 function runUndeploy() {
   if (!confirm('Delete service "' + getConfig().service_name + '"?')) return;
-  $('output').textContent = '';
-  setStatus('busy');
-  logLine('Deleting service...');
+  $('output').textContent = ''; setStatus('busy'); logLine('Deleting service...');
   streamPost('/undeploy', getConfig(), logLine, function(code) {
     logLine(code === 0 ? 'Service deleted.' : 'Delete failed (exit ' + code + ').');
     checkStatus();
   });
 }
 
+/* ── Init ── */
 document.addEventListener('DOMContentLoaded', function() {
+  var initialPage = pageFromPath();
+  switchPage(initialPage, false);
+  history.replaceState({ page: initialPage }, '', initialPage === 'home' ? '/home' : '/mdm_config');
   $('btn-add-row').addEventListener('click', function() { addRow('', ''); });
   $('btn-add-rel-row').addEventListener('click', function() { addRelRow('', '', ''); });
+  $('btn-add-create-rel-row').addEventListener('click', function() { addCreateRelRow('', '', '', ''); });
+  $('btn-add-entity-field-row').addEventListener('click', function() { addEntityFieldRow('', '', '', false); });
   $('btn-copy').addEventListener('click', copyCmd);
   $('btn-deploy').addEventListener('click', runDeploy);
   $('btn-undeploy').addEventListener('click', runUndeploy);
   document.addEventListener('input', function(e) {
     if (e.target.tagName === 'INPUT') {
-      // If an entity alias changed, refresh the dropdowns in the relationship table
       if (e.target.closest('#entity-rows')) refreshEntitySelects();
       updateCmd();
     }
   });
 
   fetch('/defaults').then(function(r) { return r.json(); }).then(function(d) {
-    $('idmc_user').value         = d.idmc_user;
-    $('idmc_pass').value         = d.idmc_pass;
-    $('mdm_base_url').value      = d.mdm_base_url;
-    $('idmc_login_host').value   = d.idmc_login_host;
-    $('project').value           = d.project;
-    $('region').value            = d.region;
-    $('service_name').value      = d.service_name;
-    $('oauth_client_id').value   = d.oauth_client_id;
-    $('oauth_client_secret').value = d.oauth_client_secret;
-    for (var i = 0; i < d.entity_types.length; i++) {
+    $('idmc_user').value            = d.idmc_user;
+    $('idmc_pass').value            = d.idmc_pass;
+    $('mdm_base_url').value         = d.mdm_base_url;
+    $('idmc_login_host').value      = d.idmc_login_host;
+    $('project').value              = d.project;
+    $('region').value               = d.region;
+    $('service_name').value         = d.service_name;
+    $('oauth_client_id').value      = d.oauth_client_id;
+    $('oauth_client_secret').value  = d.oauth_client_secret;
+    for (var i = 0; i < d.entity_types.length; i++)
       addRow(d.entity_types[i].alias, d.entity_types[i].mdm_type);
-    }
     for (var i = 0; i < d.relationship_types.length; i++) {
       var r = d.relationship_types[i];
       addRelRow(r.entity_alias, r.rel_alias, r.mdm_rel);
+    }
+    $('create_rel_source_system').value = d.create_rel_source_system || 'c360.default.system';
+    for (var i = 0; i < (d.create_relationship_types || []).length; i++) {
+      var cr = d.create_relationship_types[i];
+      addCreateRelRow(cr.from_entity_alias, cr.rel_alias, cr.to_entity_alias, cr.mdm_rel);
+    }
+    for (var i = 0; i < (d.create_entity_fields || []).length; i++) {
+      var ef = d.create_entity_fields[i];
+      addEntityFieldRow(ef.entity_alias, ef.label, ef.field, ef.required);
     }
     updateCmd();
     checkStatus();
