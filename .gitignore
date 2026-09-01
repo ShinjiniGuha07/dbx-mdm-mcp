@@ -3,6 +3,7 @@
 .env.local
 .env.*.local
 env.yaml
+gcp.json
 
 # Python
 venv/

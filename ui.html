@@ -160,6 +160,7 @@
 <nav class="topnav">
   <span class="topnav-brand">MDM MCP</span>
   <button class="nav-btn" id="nav-home"         onclick="switchPage('home')">Home</button>
+  <button class="nav-btn" id="nav-gcp"          onclick="switchPage('gcp')">GCP Setup</button>
   <button class="nav-btn" id="nav-configurator" onclick="switchPage('configurator')">MDM MCP Configurator</button>
 </nav>
 
@@ -322,6 +323,64 @@
 
 
 <!-- ════════════════════════════════════════════════
+     GCP SETUP PANE
+════════════════════════════════════════════════ -->
+<div id="pane-gcp" class="page" style="display:none">
+
+  <div class="home-hero">
+    <h1>GCP Setup</h1>
+    <p>Set up your Google Cloud project before deploying. This runs the required API enablement and IAM bindings so the Deploy button works on the first try.</p>
+  </div>
+
+  <!-- Prerequisites -->
+  <div class="card">
+    <h2 style="display:flex;align-items:center;gap:12px">
+      Prerequisites
+      <button onclick="checkGcpStatus()" style="padding:3px 12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;font-weight:600;color:#475569;cursor:pointer">Re-check</button>
+    </h2>
+    <div id="gcp-prereq" style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
+      <div id="gcp-cli-row" style="display:flex;align-items:center;gap:10px;font-size:13px">
+        <span id="gcp-cli-icon" style="font-size:16px">⏳</span>
+        <span id="gcp-cli-label" style="color:#64748b">Checking gcloud CLI...</span>
+      </div>
+      <div id="gcp-install-box" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:13px;color:#92400e">
+        <strong>gcloud CLI is not installed.</strong><br>
+        Download and install it, then click <strong>Re-check</strong> above.<br>
+        <a href="https://cloud.google.com/sdk/docs/install" target="_blank" style="color:#4f46e5;font-weight:600">cloud.google.com/sdk/docs/install →</a>
+      </div>
+      <div id="gcp-auth-row" style="display:flex;align-items:center;gap:10px;font-size:13px">
+        <span id="gcp-auth-icon" style="font-size:16px">⏳</span>
+        <span id="gcp-auth-label" style="color:#64748b">Checking authentication...</span>
+        <button id="btn-gcp-login" style="display:none;padding:4px 14px;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer" onclick="runGcpAuth()">Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project config -->
+  <div class="card">
+    <h2>Project Configuration</h2>
+    <div class="grid2">
+      <div class="field"><label>GCP Project ID</label><input id="gcp-project" placeholder="my-project-id"></div>
+      <div class="field"><label>Region</label><input id="gcp-region" value="us-central1"></div>
+      <div class="field"><label>Service Name</label><input id="gcp-service-name" value="mdm-search-mcp"></div>
+    </div>
+  </div>
+
+  <!-- Setup + output -->
+  <div class="card">
+    <h2>Setup GCP Project</h2>
+    <p style="font-size:12px;color:#64748b;margin-bottom:14px">Enables Cloud Run, Cloud Build, and Artifact Registry APIs, then grants the required IAM roles. Safe to run multiple times.</p>
+    <div class="actions" style="margin-bottom:12px">
+      <button id="btn-gcp-setup" class="btn-deploy" disabled title="Complete prerequisites above first" onclick="runGcpSetup()">Setup GCP Project</button>
+      <button id="btn-gcp-save" class="btn-deploy" style="background:#16a34a;display:none" onclick="saveGcp()">Save &amp; Continue →</button>
+    </div>
+    <div id="gcp-output" style="background:#0d1117;color:#3fb950;font-family:monospace;font-size:12px;padding:14px;border-radius:8px;height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5"></div>
+  </div>
+
+</div><!-- /pane-gcp -->
+
+
+<!-- ════════════════════════════════════════════════
      CONFIGURATOR PANE
 ════════════════════════════════════════════════ -->
 <div id="pane-configurator" class="page" style="display:none">
@@ -343,6 +402,9 @@
 
   <div class="card">
     <h2>Deployment</h2>
+    <div id="gcp-locked-notice" style="display:none;font-size:11px;color:#64748b;margin-bottom:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px">
+      🔒 Set via GCP Setup. <button onclick="switchPage('gcp')" style="background:none;border:none;color:#4f46e5;font-size:11px;font-weight:600;cursor:pointer;padding:0">Edit in GCP Setup →</button>
+    </div>
     <div class="grid2">
       <div class="field"><label>GCP Project</label><input id="project"></div>
       <div class="field"><label>Region</label><input id="region"></div>
@@ -456,13 +518,16 @@ var $ = function(id) { return document.getElementById(id); };
 /* ── Page navigation ── */
 function switchPage(page, pushState) {
   $('pane-home').style.display         = page === 'home'         ? 'block' : 'none';
+  $('pane-gcp').style.display          = page === 'gcp'          ? 'block' : 'none';
   $('pane-configurator').style.display = page === 'configurator' ? 'block' : 'none';
   $('nav-home').className         = 'nav-btn' + (page === 'home'         ? ' nav-active' : '');
+  $('nav-gcp').className          = 'nav-btn' + (page === 'gcp'          ? ' nav-active' : '');
   $('nav-configurator').className = 'nav-btn' + (page === 'configurator' ? ' nav-active' : '');
   if (pushState !== false) {
-    var url = page === 'home' ? '/home' : '/mdm_config';
+    var url = page === 'home' ? '/home' : page === 'gcp' ? '/gcp_setup' : '/mdm_config';
     history.pushState({ page: page }, '', url);
   }
+  if (page === 'gcp') checkGcpStatus();
 }
 
 window.addEventListener('popstate', function(e) {
@@ -471,7 +536,115 @@ window.addEventListener('popstate', function(e) {
 });
 
 function pageFromPath() {
-  return window.location.pathname === '/mdm_config' ? 'configurator' : 'home';
+  var p = window.location.pathname;
+  if (p === '/mdm_config') return 'configurator';
+  if (p === '/gcp_setup')  return 'gcp';
+  return 'home';
+}
+
+/* ── GCP Setup ── */
+function checkGcpStatus() {
+  // Reset to loading state
+  ['gcp-cli-icon','gcp-auth-icon'].forEach(function(id) {
+    $(id).textContent = '⏳'; $(id).style.color = '';
+  });
+  ['gcp-cli-label','gcp-auth-label'].forEach(function(id) {
+    $(id).style.color = '#64748b';
+  });
+  $('gcp-cli-label').textContent  = 'Checking gcloud CLI...';
+  $('gcp-auth-label').textContent = 'Checking authentication...';
+  $('gcp-install-box').style.display = 'none';
+  $('btn-gcp-login').style.display   = 'none';
+  $('btn-gcp-setup').disabled = true;
+  $('btn-gcp-setup').title = 'Complete prerequisites above first';
+
+  fetch('/gcp_status').then(function(r) { return r.json(); }).then(function(res) {
+    if (!res.gcloud_installed) {
+      $('gcp-cli-icon').textContent  = '✗';
+      $('gcp-cli-icon').style.color  = '#dc2626';
+      $('gcp-cli-label').textContent = 'gcloud CLI not found';
+      $('gcp-cli-label').style.color = '#dc2626';
+      $('gcp-install-box').style.display = 'block';
+      $('gcp-auth-icon').textContent  = '—';
+      $('gcp-auth-label').textContent = 'Install gcloud first';
+      return;
+    }
+    $('gcp-cli-icon').textContent  = '✓';
+    $('gcp-cli-icon').style.color  = '#16a34a';
+    $('gcp-cli-label').textContent = 'gcloud CLI installed';
+    $('gcp-cli-label').style.color = '#16a34a';
+
+    if (res.authenticated) {
+      $('gcp-auth-icon').textContent  = '✓';
+      $('gcp-auth-icon').style.color  = '#16a34a';
+      $('gcp-auth-label').textContent = 'Authenticated as ' + res.active_account;
+      $('gcp-auth-label').style.color = '#16a34a';
+      $('btn-gcp-setup').disabled = false;
+      $('btn-gcp-setup').title = '';
+    } else {
+      $('gcp-auth-icon').textContent  = '✗';
+      $('gcp-auth-icon').style.color  = '#dc2626';
+      $('gcp-auth-label').textContent = 'Not authenticated';
+      $('gcp-auth-label').style.color = '#dc2626';
+      $('btn-gcp-login').style.display = 'inline-block';
+    }
+  }).catch(function() {
+    $('gcp-cli-label').textContent = 'Could not check status';
+    $('gcp-cli-label').style.color = '#dc2626';
+  });
+}
+
+function gcpLog(text) {
+  var el = $('gcp-output');
+  el.textContent += text.replace(/\x1b\[[0-9;]*m|\[[0-9;]*m/g, '') + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function runGcpAuth() {
+  $('gcp-output').textContent = '';
+  $('btn-gcp-login').disabled = true;
+  streamPost('/gcp_auth', {}, gcpLog, function(code) {
+    $('btn-gcp-login').disabled = false;
+    if (code === 0) checkGcpStatus();
+    else gcpLog('Login failed (exit ' + code + ').');
+  });
+}
+
+function runGcpSetup() {
+  var project     = $('gcp-project').value.trim();
+  var region      = $('gcp-region').value.trim();
+  var serviceName = $('gcp-service-name').value.trim();
+  if (!project) { alert('Enter a GCP Project ID first.'); return; }
+  $('gcp-output').textContent = '';
+  $('btn-gcp-setup').disabled = true;
+  $('btn-gcp-save').style.display = 'none';
+  streamPost('/gcp_setup', { project: project, region: region, service_name: serviceName }, gcpLog, function(code) {
+    $('btn-gcp-setup').disabled = false;
+    if (code === 0) {
+      gcpLog('\nSetup complete! Click "Save & Continue" to lock these settings and go to the Configurator.');
+      $('btn-gcp-save').style.display = 'inline-block';
+    } else {
+      gcpLog('\nSetup failed (exit ' + code + '). Check the output above.');
+    }
+  });
+}
+
+function saveGcp() {
+  var project     = $('gcp-project').value.trim();
+  var region      = $('gcp-region').value.trim();
+  var serviceName = $('gcp-service-name').value.trim();
+  fetch('/gcp_save', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: project, region: region, service_name: serviceName }),
+  }).then(function() {
+    // Update configurator fields and lock them
+    $('project').value      = project;
+    $('region').value       = region;
+    $('service_name').value = serviceName;
+    lockGcpFields(true);
+    updateCmd();
+    switchPage('configurator');
+  });
 }
 
 /* ── Entity alias helpers ── */
@@ -944,11 +1117,23 @@ function runUndeploy() {
   });
 }
 
+/* ── GCP field lock ── */
+function lockGcpFields(locked) {
+  var fields = [$('project'), $('region'), $('service_name')];
+  for (var i = 0; i < fields.length; i++) {
+    fields[i].readOnly = locked;
+    fields[i].style.background = locked ? '#f8fafc' : '';
+    fields[i].style.color      = locked ? '#64748b' : '';
+  }
+  $('gcp-locked-notice').style.display = locked ? 'block' : 'none';
+}
+
 /* ── Init ── */
 document.addEventListener('DOMContentLoaded', function() {
   var initialPage = pageFromPath();
   switchPage(initialPage, false);
-  history.replaceState({ page: initialPage }, '', initialPage === 'home' ? '/home' : '/mdm_config');
+  var initialUrl = initialPage === 'home' ? '/home' : initialPage === 'gcp' ? '/gcp_setup' : '/mdm_config';
+  history.replaceState({ page: initialPage }, '', initialUrl);
   $('btn-add-row').addEventListener('click', function() { addRow('', ''); });
   $('btn-add-rel-row').addEventListener('click', function() { addRelRow('', '', ''); });
   $('btn-add-create-rel-row').addEventListener('click', function() { addCreateRelRow('', '', '', ''); });
@@ -971,6 +1156,11 @@ document.addEventListener('DOMContentLoaded', function() {
     $('project').value              = d.project;
     $('region').value               = d.region;
     $('service_name').value         = d.service_name;
+    // Pre-populate GCP Setup form with same values
+    $('gcp-project').value      = d.project;
+    $('gcp-region').value       = d.region;
+    $('gcp-service-name').value = d.service_name;
+    if (d.gcp_locked) lockGcpFields(true);
     $('oauth_client_id').value      = d.oauth_client_id;
     $('oauth_client_secret').value  = d.oauth_client_secret;
     for (var i = 0; i < d.entity_types.length; i++)

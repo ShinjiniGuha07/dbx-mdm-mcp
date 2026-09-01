@@ -167,9 +167,27 @@ def _defaults_from_env_yaml(env: dict) -> dict:
     return d
 
 
+def _load_gcp_json() -> dict:
+    path = PROJECT_DIR / "gcp.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
+
+
 async def get_defaults(request: Request):
     env = _load_env_yaml()
-    data = _defaults_from_env_yaml(env) if env else DEFAULTS
+    data = _defaults_from_env_yaml(env) if env else dict(DEFAULTS)
+    gcp = _load_gcp_json()
+    if gcp:
+        if "project"      in gcp: data["project"]      = gcp["project"]
+        if "region"       in gcp: data["region"]        = gcp["region"]
+        if "service_name" in gcp: data["service_name"]  = gcp["service_name"]
+        data["gcp_locked"] = True  # tells UI to render these fields read-only
+    else:
+        data["gcp_locked"] = False
     return JSONResponse(data)
 
 
@@ -239,14 +257,126 @@ async def post_undeploy(request: Request):
     )
 
 
+# ── GCP Setup endpoints ──
+
+async def get_gcp_status(request: Request):
+    """Check gcloud installation and auth status."""
+    # Check if gcloud is installed
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "gcloud", "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        installed = proc.returncode == 0
+    except FileNotFoundError:
+        installed = False
+
+    if not installed:
+        return JSONResponse({"gcloud_installed": False, "authenticated": False, "active_account": None})
+
+    # Check active account
+    proc = await asyncio.create_subprocess_exec(
+        "gcloud", "auth", "list",
+        "--format=value(account)",
+        "--filter=status=ACTIVE",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    account = stdout.decode().strip().splitlines()[0] if stdout.decode().strip() else None
+    return JSONResponse({
+        "gcloud_installed": True,
+        "authenticated": bool(account),
+        "active_account": account or None,
+    })
+
+
+async def _stream_shell(script: str):
+    proc = await asyncio.create_subprocess_shell(
+        script,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=str(PROJECT_DIR),
+    )
+    async for line in proc.stdout:
+        yield f"data: {line.decode(errors='replace').rstrip()}\n\n"
+    await proc.wait()
+    yield f"data: [EXIT:{proc.returncode}]\n\n"
+
+
+async def post_gcp_auth(_request: Request):
+    """Stream gcloud auth login."""
+    return StreamingResponse(
+        _stream_shell("gcloud auth login"),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def post_gcp_setup(request: Request):
+    """Enable APIs and set IAM bindings for the given project."""
+    body = await request.json()
+    project = body["project"]
+    script = f"""
+set -e
+echo "--- Enabling Cloud Run, Cloud Build, Artifact Registry APIs..."
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project={project}
+
+echo "--- Getting project number..."
+PROJECT_NUMBER=$(gcloud projects describe {project} --format='value(projectNumber)')
+echo "Project number: $PROJECT_NUMBER"
+
+echo "--- Granting Compute SA: storage.objectViewer..."
+gcloud projects add-iam-policy-binding {project} \\
+  --member="serviceAccount:${{PROJECT_NUMBER}}-compute@developer.gserviceaccount.com" \\
+  --role="roles/storage.objectViewer" --quiet
+
+echo "--- Granting Compute SA: logging.logWriter..."
+gcloud projects add-iam-policy-binding {project} \\
+  --member="serviceAccount:${{PROJECT_NUMBER}}-compute@developer.gserviceaccount.com" \\
+  --role="roles/logging.logWriter" --quiet
+
+echo "--- Granting Cloud Build SA: artifactregistry.writer..."
+gcloud projects add-iam-policy-binding {project} \\
+  --member="serviceAccount:${{PROJECT_NUMBER}}@cloudbuild.gserviceaccount.com" \\
+  --role="roles/artifactregistry.writer" --quiet
+
+echo "--- GCP project setup complete."
+"""
+    return StreamingResponse(
+        _stream_shell(script),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def post_gcp_save(request: Request):
+    """Save project/region/service_name to gcp.json."""
+    body = await request.json()
+    gcp = {
+        "project":      body.get("project", ""),
+        "region":       body.get("region", "us-central1"),
+        "service_name": body.get("service_name", "mdm-search-mcp"),
+    }
+    (PROJECT_DIR / "gcp.json").write_text(json.dumps(gcp, indent=2))
+    return JSONResponse({"ok": True})
+
+
 app = Starlette(routes=[
-    Route("/",          get_index),
-    Route("/home",      get_index),
+    Route("/",           get_index),
+    Route("/home",       get_index),
+    Route("/gcp_setup",  get_index),
     Route("/mdm_config", get_index),
-    Route("/defaults",  get_defaults),
-    Route("/status",    get_status),
-    Route("/deploy",    post_deploy,   methods=["POST"]),
-    Route("/undeploy",  post_undeploy, methods=["POST"]),
+    Route("/defaults",   get_defaults),
+    Route("/status",     get_status),
+    Route("/deploy",     post_deploy,    methods=["POST"]),
+    Route("/undeploy",   post_undeploy,  methods=["POST"]),
+    Route("/gcp_status", get_gcp_status),
+    Route("/gcp_auth",   post_gcp_auth,  methods=["POST"]),
+    Route("/gcp_setup",  post_gcp_setup, methods=["POST"]),
+    Route("/gcp_save",   post_gcp_save,  methods=["POST"]),
 ])
 
 if __name__ == "__main__":

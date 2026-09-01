@@ -1,134 +1,122 @@
 # dbx-mdm-mcp
 
-MCP server that wraps the Informatica MDM Search and Business Entity APIs for registration in
-Databricks Genie. Exposes three tools and a `/oauth/token` endpoint for Databricks client-credentials auth.
-Both the MCP and OAuth endpoints run on a single port (required by Cloud Run).
+An MCP (Model Context Protocol) server that exposes Informatica MDM Business 360 as tools for AI assistants — Databricks Genie, Claude Code, Slack, and any MCP-compatible client.
+
+Configure entity types, relationship types, and create permissions via a local web UI, then deploy to Google Cloud Run with one click.
+
+---
+
+## What It Does
+
+Connect your AI assistant to live Informatica MDM data. Ask things like:
+
+- "Find all guests named John Doe"
+- "Show me the household members linked to business ID MDM00000000IN6"
+- "Create a new guest record for Jane Smith"
+- "Add person MDM123 to household MDM456"
+
+The server handles MDM authentication, entity type resolution, and field validation. Your AI just calls tools.
+
+---
 
 ## Tools
 
 | Tool | Description |
 |------|-------------|
-| `search_mdm_entity` | Search MDM by name/text across any entity type |
+| `search_mdm_entity` | Full-text search across MDM records for a given entity type |
 | `get_mdm_entity` | Fetch a full record by business entity name + business ID |
-| `list_entity_types` | List available entity type aliases for the current environment |
+| `list_entity_types` | List configured entity type aliases |
+| `get_mdm_relationships` | Get records related to an entity via a configured relationship |
+| `list_relationship_types` | List configured query relationship types |
+| `create_mdm_relationship` | Create a relationship link between two MDM records |
+| `list_create_relationship_types` | List relationship types permitted for creation |
+| `create_mdm_entity` | Create a new master record in MDM |
+| `list_entity_create_fields` | List fields required to create a given entity type |
 
-## Entity types
+---
 
-Entity types are configured as a logical name → MDM entityType string mapping, so the same
-server code works across environments. The default mapping is:
+## Quick Start
 
-| Logical name | MDM entityType |
-|-------------|----------------|
-| `person` | `c360.person` |
-| `guest` | `c360_person_1780596889717` |
-| `organization` / `org` | `c360.organization` |
-
-Override per-environment by setting `ENTITY_TYPES` as a JSON string (see `.env.example`).
-Genie can also pass raw MDM entityType strings directly if needed.
-
-## Local run
+### 1. Run the configurator UI
 
 ```bash
-# Requires Python 3.10+ (macOS system Python 3.9 is too old)
+pip install -r requirements.txt
+python ui.py
+```
+
+Open [http://localhost:7000](http://localhost:7000).
+
+### 2. Set up GCP (first time only)
+
+Go to the **GCP Setup** tab. It will:
+- Check gcloud CLI is installed and authenticated
+- Enable the required Cloud APIs (Cloud Run, Cloud Build, Artifact Registry)
+- Grant IAM permissions to the service accounts
+- Save your project/region/service name so you don't re-enter them
+
+> gcloud CLI must be installed before this step. Download: https://cloud.google.com/sdk/docs/install
+
+### 3. Configure MDM
+
+Go to the **MDM MCP Configurator** tab and fill in:
+- **IDMC credentials** — username, password, MDM base URL, login host
+- **OAuth credentials** — client ID and secret (you choose these; give them to Databricks/Claude/Slack)
+- **Entity Types** — map aliases (e.g. `guest`) to MDM entity type strings (e.g. `c360_person_...`)
+- **Entity Create Fields** — fields the AI should gather before creating a record
+- **Relationship Types** — which relationships can be queried
+- **Create Relationship Types** — which relationships can be created
+
+### 4. Deploy
+
+Click **Deploy** in the Configurator tab. The UI writes `env.yaml` and runs `gcloud run deploy` streaming output to the page.
+
+On success, **Connection Settings** appear at the bottom with copy-ready values for Databricks, Claude Code, and Slack.
+
+---
+
+## Connecting AI Clients
+
+See **[GUIDE.md](GUIDE.md)** for full setup instructions for each client:
+- [Databricks Genie](GUIDE.md#databricks)
+- [Claude Code](GUIDE.md#claude-code)
+- [Slack](GUIDE.md#slack)
+
+---
+
+## Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `env.yaml` | All env vars written at deploy time — gitignored, source of truth for what's deployed |
+| `gcp.json` | GCP project/region/service name saved by GCP Setup tab — gitignored |
+| `.env` | Local development only — copy from `.env.example` |
+
+---
+
+## Local Server Development
+
+```bash
 brew install python@3.12
 /opt/homebrew/bin/python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-
-cp .env.example .env   # fill in your credentials
+cp .env.example .env   # fill in credentials
 python server.py
 ```
 
-Test the OAuth token endpoint:
-```bash
-curl -s -X POST http://localhost:8000/oauth/token \
-  -d "grant_type=client_credentials&client_id=<OAUTH_CLIENT_ID>&client_secret=<OAUTH_CLIENT_SECRET>" \
-  | python3 -m json.tool
+Server starts at `http://localhost:8000`. See [GUIDE.md — Architecture](GUIDE.md#architecture) for how auth and the MCP/OAuth endpoints work together.
+
+---
+
+## Project Structure
+
 ```
-
-## Deploy to Cloud Run
-
- **Corporate GCP projects (org policy):** Many work GCP projects block `allUsers` IAM via org policy, which means `--allow-unauthenticated` will silently fail and Databricks won't be able to reach the service. If you hit this, use a personal/sandbox project instead (e.g. `shin-mdm-dbx-demo` is mine and it works). Ask your GCP admin for an exception if you need it on a corporate project. 
-
-### Prerequisites
-
-**1. Install and authenticate gcloud CLI**
-```bash
-brew install google-cloud-sdk
-gcloud auth login
-gcloud auth application-default login
+server.py      — MCP server (tools + OAuth endpoint) deployed to Cloud Run
+ui.py          — Local configurator UI backend
+ui.html        — Configurator UI (Home, GCP Setup, MDM MCP Configurator tabs)
+Dockerfile     — Cloud Run image definition
+requirements.txt
+env.yaml       — Generated at deploy time (gitignored)
+gcp.json       — Generated by GCP Setup tab (gitignored)
+GUIDE.md       — Architecture, client setup, troubleshooting
 ```
-
-**2. Create a GCP project and enable billing** — required to activate APIs (free tier still applies).
-
-**3. Enable required APIs**
-```bash
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
-  --project=<your-project-id>
-```
-
-**4. Grant required permissions** (needed on new projects — two different service accounts):
-```bash
-# Find your project number (different from project ID):
-gcloud projects describe <your-project-id> --format='value(projectNumber)'
-
-PROJECT_NUMBER=<number-from-above>
-
-# Compute SA — lets Cloud Build read uploaded source from GCS
-gcloud projects add-iam-policy-binding <your-project-id> \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-  --role="roles/storage.objectViewer"
-gcloud projects add-iam-policy-binding <your-project-id> \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-  --role="roles/logging.logWriter"
-
-# Cloud Build SA — lets Cloud Build push the built image to Artifact Registry
-gcloud projects add-iam-policy-binding <your-project-id> \
-  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-  --role="roles/artifactregistry.writer"
-```
-
-### Deploy
-
-> **Note:** Do not include `PORT` in `--set-env-vars` — Cloud Run sets it automatically and will reject the deploy if you pass it.
-
-```bash
-gcloud run deploy mdm-search-mcp \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --port 8000 \
-  --set-env-vars "IDMC_USER=...,IDMC_PASS=...,MDM_BASE_URL=https://usw1-mdm.dmp-us.informaticacloud.com,IDMC_LOGIN_HOST=https://dmp-us.informaticacloud.com,OAUTH_CLIENT_ID=...,OAUTH_CLIENT_SECRET=...,BASE_URL=https://<your-run-url>"
-```
-
-To override entity types for a specific environment, add:
-```
-ENTITY_TYPES={"person":"c360.person","guest":"c360_person_xxxx","organization":"c360.organization"}
-```
-
-## Databricks registration
-
-Create a Unity Catalog **HTTP connection** with:
-
-| Field | Value |
-|-------|-------|
-| Connection type | HTTP |
-| Is MCP connection | ✅ checked |
-| Host | `https://<your-cloud-run-url>` |
-| Base path | `/mcp` |
-| Auth type | OAuth M2M |
-| Token URL | `https://<your-cloud-run-url>/oauth/token` |
-| Client ID | value of `OAUTH_CLIENT_ID` |
-| Client Secret | value of `OAUTH_CLIENT_SECRET` |
-| OAuth scope | *(leave blank)* |
-
-Then add it to Genie via **Settings → MCP Servers → Add Server → External MCP server**.
-
-## Environment variables
-
-See `.env.example` for all variables and descriptions.
-See `GUIDE.md` for full architecture, code walkthrough, and troubleshooting.
-
-
-# TODO:
-1. add hierarchies
